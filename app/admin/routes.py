@@ -5,7 +5,7 @@ from app.models.user import User
 from app.models.student_profile import StudentProfile
 from app.models.course import Course, CourseSchedule, CourseEnrollment, CoursePayment
 from app.models.payment import Payment
-from app.admin.forms import CourseForm
+from app.admin.forms import CourseForm, AdminPasswordChangeForm
 from app import db
 from functools import wraps
 from datetime import datetime, timedelta
@@ -13,6 +13,7 @@ import pandas as pd
 import os
 from werkzeug.utils import secure_filename
 from flask_wtf.csrf import validate_csrf
+from werkzeug.security import generate_password_hash
 
 def admin_required(f):
     @wraps(f)
@@ -824,3 +825,16 @@ def delete_course_payment(id, payment_id):
             
     except Exception as e:
         return jsonify({'success': False, 'error': f'Veri işleme hatası: {str(e)}'}) 
+
+@admin.route('/change-password', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def change_password():
+    """Admin şifre değiştirme sayfası"""
+    form = AdminPasswordChangeForm()
+    if form.validate_on_submit():
+        current_user.password_hash = generate_password_hash(form.new_password.data)
+        db.session.commit()
+        flash('Şifre başarıyla değiştirildi.', 'success')
+        return redirect(url_for('admin.dashboard'))
+    return render_template('admin/change_password.html', title='Şifre Değiştir', form=form) 

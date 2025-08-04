@@ -14,6 +14,7 @@ Kafka Dil Akademisi, dil kursları için özel olarak tasarlanmış bir öğrenc
 - **Ödeme Takibi**: Ödeme durumu, ekstre yükleme, ödeme kayıtları
 - **İstatistikler**: Dashboard'da detaylı istatistikler ve grafikler
 - **Hızlı İşlemler**: Kolay erişim için hızlı işlem kartları
+- **Şifre Yönetimi**: Güvenli admin şifre değiştirme sistemi
 
 ### 👨‍🎓 Öğrenci Paneli
 - **Profil Yönetimi**: Kişisel bilgi güncelleme
@@ -27,6 +28,8 @@ Kafka Dil Akademisi, dil kursları için özel olarak tasarlanmış bir öğrenc
 - **CSRF Koruması**: Form güvenliği
 - **Rate Limiting**: İstek sınırlama
 - **Input Sanitization**: Kullanıcı girdilerinin temizlenmesi
+- **Şifre Hashleme**: Güvenli şifre saklama
+- **Admin Şifre Değiştirme**: Güvenli şifre güncelleme sistemi
 
 ### 📧 Email Sistemi
 - **Profil Güncellemeleri**: Otomatik email bildirimleri
@@ -39,6 +42,7 @@ Kafka Dil Akademisi, dil kursları için özel olarak tasarlanmış bir öğrenc
 - **Hover Efektleri**: Etkileşimli kartlar ve butonlar
 - **Grafikler**: Chart.js ile ödeme durumu grafikleri
 - **Modal'lar**: Modern popup'lar ve form'lar
+- **Şifre Değiştirme Arayüzü**: Kullanıcı dostu güvenlik formu
 
 ## 📋 Gereksinimler
 
@@ -51,8 +55,8 @@ Kafka Dil Akademisi, dil kursları için özel olarak tasarlanmış bir öğrenc
 
 ### 1. Repository'yi Klonlayın
 ```bash
-git clone <repository-url>
-cd kafka
+git clone https://github.com/MahmudHudayiTaner/kafka-proje.git
+cd kafka-proje
 ```
 
 ### 2. Virtual Environment Oluşturun
@@ -144,6 +148,14 @@ Uygulama ilk çalıştırıldığında otomatik olarak oluşturulur:
    - **Kurs Yönetimi**: Kurs ekleme ve düzenleme
    - **Ödeme Yönetimi**: Ödeme takibi ve ekstre yükleme
 
+### Admin Şifre Değiştirme
+
+1. Admin paneline giriş yapın
+2. Dashboard'da "Şifre Değiştir" butonuna tıklayın
+3. Mevcut şifrenizi girin
+4. Yeni güçlü şifrenizi belirleyin
+5. Şifreyi onaylayın ve kaydedin
+
 ## 🏗️ Proje Yapısı
 
 ```
@@ -159,13 +171,16 @@ kafka/
 │   │   ├── forms.py           # Giriş/kayıt formları
 │   │   └── routes.py          # Auth route'ları
 │   ├── admin/                  # Admin paneli
-│   │   ├── forms.py           # Admin formları
+│   │   ├── forms.py           # Admin formları (şifre değiştirme dahil)
 │   │   └── routes.py          # Admin route'ları
 │   ├── student/                # Öğrenci işlemleri
 │   │   ├── forms.py           # Öğrenci formları
 │   │   └── routes.py          # Öğrenci route'ları
 │   ├── templates/              # HTML template'leri
 │   │   ├── admin/             # Admin sayfaları
+│   │   │   ├── dashboard.html # Ana dashboard
+│   │   │   ├── courses.html   # Kurs yönetimi
+│   │   │   └── change_password.html # Şifre değiştirme
 │   │   ├── auth/              # Giriş/kayıt sayfaları
 │   │   ├── student/           # Öğrenci sayfaları
 │   │   └── emails/            # Email template'leri
@@ -192,6 +207,7 @@ kafka/
 - **Responsive Kartlar**: Mobil uyumlu
 - **Modal'lar**: Modern popup'lar
 - **Grafikler**: Chart.js entegrasyonu
+- **Şifre Değiştirme Formu**: Güvenli ve kullanıcı dostu
 
 ## 🔒 Güvenlik
 
@@ -202,6 +218,13 @@ kafka/
 - **SQL Injection Koruması**: SQLAlchemy ORM kullanımı
 - **Session Güvenliği**: Güvenli session konfigürasyonu
 - **Password Hashing**: Güvenli şifre hashleme
+- **Admin Şifre Değiştirme**: Güvenli şifre güncelleme sistemi
+
+### Şifre Güvenliği
+- **Minimum 8 Karakter**: Şifre uzunluğu zorunluluğu
+- **Hashleme**: Werkzeug ile güvenli hashleme
+- **Validasyon**: Mevcut şifre doğrulama
+- **Güvenlik İpuçları**: Kullanıcı eğitimi
 
 ## 📧 Email Sistemi
 
