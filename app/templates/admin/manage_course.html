@@ -1,0 +1,506 @@
+{% extends "base.html" %}
+
+{% block title %}{{ course.name }} - Kurs Yönetimi{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="mb-0">{{ course.name }} - Kurs Yönetimi</h2>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('admin.courses') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Kurslara Dön
+                    </a>
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addStudentsModal">
+                        <i class="bi bi-person-plus"></i> Öğrenci Ekle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kurs Bilgileri -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Kurs Bilgileri</h5>
+                    <div class="row">
+                        <div class="col-6">
+                            <p><strong>Eğitmen:</strong> {{ course.instructor_name }}</p>
+                            <p><strong>Ücret:</strong> {{ "{:,.2f}".format(course.price) }} TL</p>
+                            <p><strong>Durum:</strong> 
+                                {% if course.is_active %}
+                                    <span class="badge bg-success">Aktif</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Pasif</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-6">
+                            <p><strong>Öğrenci Sayısı:</strong> {{ enrollments|length }}</p>
+                            <p><strong>Bekleyen Ödeme:</strong> <span class="text-warning fw-bold">{{ "{:,.2f}".format(course.pending_payment) }} TL</span></p>
+                            <p><strong>Tamamlanan Ödeme:</strong> <span class="text-success fw-bold">{{ "{:,.2f}".format(course.total_completed_payment) }} TL</span></p>
+                        </div>
+                    </div>
+                    {% if course.description %}
+                    <p><strong>Açıklama:</strong> {{ course.description }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Ders Saatleri</h5>
+                    {% if course.schedules %}
+                        {% for schedule in course.schedules %}
+                        <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                            <span class="text-muted">{{ schedule.day_of_week|turkish_day }}</span>
+                            <span class="fw-bold">{{ schedule.start_time.strftime('%H:%M') }} - {{ schedule.end_time.strftime('%H:%M') }}</span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">Henüz ders saati eklenmemiş</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kayıtlı Öğrenciler -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Kayıtlı Öğrenciler ({{ enrollments|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if enrollments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Öğrenci</th>
+                                    <th>Email</th>
+                                    <th>Kayıt Tarihi</th>
+                                    <th>Ödenen</th>
+                                    <th>Kalan</th>
+                                    <th>İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for enrollment in enrollments %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">
+                                            {% if enrollment.student.student_profile %}
+                                                {% if enrollment.student.student_profile.first_name and enrollment.student.student_profile.last_name %}
+                                                    {{ enrollment.student.student_profile.first_name }} {{ enrollment.student.student_profile.last_name }}
+                                                {% elif enrollment.student.student_profile.first_name %}
+                                                    {{ enrollment.student.student_profile.first_name }}
+                                                {% elif enrollment.student.student_profile.last_name %}
+                                                    {{ enrollment.student.student_profile.last_name }}
+                                                {% else %}
+                                                    {{ enrollment.student.email }}
+                                                {% endif %}
+                                            {% else %}
+                                                {{ enrollment.student.email }}
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>{{ enrollment.student.email }}</td>
+                                    <td>{{ enrollment.enrolled_at.strftime('%d.%m.%Y') }}</td>
+                                    <td>
+                                        <span class="fw-bold text-success">{{ "{:,.2f}".format(enrollment.total_paid) }} TL</span>
+                                        {% if enrollment.payments %}
+                                        <br><small class="text-muted">
+                                            <a href="#" class="text-decoration-none" 
+                                               data-bs-toggle="collapse" 
+                                               data-bs-target="#payments-{{ enrollment.id }}" 
+                                               aria-expanded="false">
+                                                <i class="bi bi-list"></i> Detaylar ({{ enrollment.payments|length }} ödeme)
+                                            </a>
+                                        </small>
+                                        <div class="collapse mt-2" id="payments-{{ enrollment.id }}">
+                                            <div class="card card-body p-2">
+                                                {% for payment in enrollment.payments %}
+                                                <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                                                    <div>
+                                                        <small class="text-muted">{{ payment.payment_date.strftime('%d.%m.%Y') }}</small>
+                                                        <br><small>{{ payment.description or payment.notes or 'Ödeme' }}</small>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <small class="fw-bold text-success">{{ "{:,.2f}".format(payment.amount) }} TL</small>
+                                                        <br>
+                                                        <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                                onclick="deletePayment({{ payment.id }}, {{ enrollment.id }})"
+                                                                title="Ödemeyi Sil">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold {% if enrollment.remaining_payment > 0 %}text-warning{% else %}text-success{% endif %}">
+                                            {{ "{:,.2f}".format(enrollment.remaining_payment) }} TL
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-primary" 
+                                                    data-bs-toggle="modal" data-bs-target="#assignPaymentsModal"
+                                                    data-student-id="{{ enrollment.student.id }}"
+                                                    data-student-name="{% if enrollment.student.student_profile %}{% if enrollment.student.student_profile.first_name and enrollment.student.student_profile.last_name %}{{ enrollment.student.student_profile.first_name }} {{ enrollment.student.student_profile.last_name }}{% elif enrollment.student.student_profile.first_name %}{{ enrollment.student.student_profile.first_name }}{% elif enrollment.student.student_profile.last_name %}{{ enrollment.student.student_profile.last_name }}{% else %}{{ enrollment.student.email }}{% endif %}{% else %}{{ enrollment.student.email }}{% endif %}"
+                                                    data-remaining="{{ enrollment.remaining_payment }}">
+                                                <i class="bi bi-cash"></i> Ödeme Ata
+                                            </button>
+                                            <form method="POST" action="{{ url_for('admin.unenroll_student', id=course.id, student_id=enrollment.student.id) }}" 
+                                                  style="display: inline;" onsubmit="return confirm('Bu öğrenciyi kurstan çıkarmak istediğinizden emin misiniz?')">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <button type="submit" class="btn btn-outline-danger">
+                                                    <i class="bi bi-person-x"></i> Çıkar
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-people display-4 text-muted"></i>
+                        <h5 class="mt-3 text-muted">Henüz öğrenci kaydı yok</h5>
+                        <p class="text-muted">İlk öğrenciyi eklemek için "Öğrenci Ekle" butonuna tıklayın.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Öğrenci Ekleme Modal -->
+<div class="modal fade" id="addStudentsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Öğrenci Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.enroll_students', id=course.id) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Mevcut Öğrenciler</label>
+                        <div class="table-responsive" style="max-height: 300px;">
+                            <table class="table table-sm">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th><input type="checkbox" id="selectAllStudents" onchange="toggleSelectAllStudents()"></th>
+                                        <th>Ad Soyad</th>
+                                        <th>Email</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for student in available_students %}
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" name="student_ids" value="{{ student.id }}" class="student-checkbox">
+                                        </td>
+                                        <td>
+                                            {% if student.student_profile %}
+                                                {% if student.student_profile.first_name and student.student_profile.last_name %}
+                                                    {{ student.student_profile.first_name }} {{ student.student_profile.last_name }}
+                                                {% elif student.student_profile.first_name %}
+                                                    {{ student.student_profile.first_name }}
+                                                {% elif student.student_profile.last_name %}
+                                                    {{ student.student_profile.last_name }}
+                                                {% else %}
+                                                    {{ student.email }}
+                                                {% endif %}
+                                            {% else %}
+                                                {{ student.email }}
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ student.email }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if not available_students %}
+                        <p class="text-muted">Eklenebilecek öğrenci bulunmuyor.</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success" {% if not available_students %}disabled{% endif %}>
+                        <i class="bi bi-person-plus"></i> Öğrencileri Ekle
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+
+<!-- Ödeme Atama Modal -->
+<div class="modal fade" id="assignPaymentsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ödeme Atama</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Öğrenci Bilgileri -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Öğrenci Bilgileri</h6>
+                        <p><strong>Ad Soyad:</strong> <span id="studentName"></span></p>
+                        <p><strong>Kalan Ödeme:</strong> <span id="remainingPayment" class="fw-bold"></span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Kurs Bilgileri</h6>
+                        <p><strong>Kurs:</strong> {{ course.name }}</p>
+                        <p><strong>Kurs Ücreti:</strong> {{ "{:,.2f}".format(course.price) }} TL</p>
+                    </div>
+                </div>
+
+                <!-- Bekleyen Ödemeler -->
+                <div id="pendingPaymentsSection">
+                    <h6>Bekleyen Ödemeler</h6>
+                    <div class="mb-3">
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="toggleSelectAllPayments()">
+                                <i class="bi bi-check-all"></i> Tümünü Seç
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="deselectAllPayments()">
+                                <i class="bi bi-x-circle"></i> Seçimi Kaldır
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive" style="max-height: 400px;">
+                        <table class="table table-sm">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th><input type="checkbox" id="selectAllPayments" onchange="toggleSelectAllPayments()"></th>
+                                    <th>Tarih</th>
+                                    <th>Açıklama</th>
+                                    <th>Tutar</th>
+                                    <th>Referans No</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pendingPaymentsTableBody">
+                                <!-- Bekleyen ödemeler buraya yüklenecek -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-success" onclick="assignSelectedPayments()">
+                    <i class="bi bi-check-circle"></i> Seçilen Ödemeleri Ata
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Global değişken - mevcut öğrenci ID'si
+let currentStudentId = null;
+
+// Modal açıldığında öğrenci bilgilerini doldur ve bekleyen ödemeleri yükle
+document.getElementById('assignPaymentsModal').addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const studentId = button.getAttribute('data-student-id');
+    const studentName = button.getAttribute('data-student-name');
+    const remaining = parseFloat(button.getAttribute('data-remaining'));
+    
+    // Global değişkene ata
+    currentStudentId = studentId;
+    
+    // Öğrenci bilgilerini doldur
+    document.getElementById('studentName').textContent = studentName;
+    document.getElementById('remainingPayment').textContent = remaining.toFixed(2) + ' TL';
+    document.getElementById('remainingPayment').className = remaining > 0 ? 'fw-bold text-warning' : 'fw-bold text-success';
+    
+    // Bekleyen ödemeleri yükle
+    loadPendingPayments(studentId);
+});
+
+// Bekleyen ödemeleri yükle
+function loadPendingPayments(studentId) {
+    fetch(`/admin/courses/{{ course.id }}/get-pending-payments/${studentId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayPendingPayments(data.payments);
+            } else {
+                alert('Bekleyen ödemeler yüklenirken hata oluştu: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Bekleyen ödemeler yüklenirken hata oluştu.');
+        });
+}
+
+// Bekleyen ödemeleri tabloya yükle
+function displayPendingPayments(payments) {
+    const tbody = document.getElementById('pendingPaymentsTableBody');
+    tbody.innerHTML = '';
+    
+    if (payments.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center text-muted">
+                    <i class="bi bi-check-circle"></i> Bekleyen ödeme bulunamadı
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    payments.forEach(payment => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <input type="checkbox" name="payment_ids" value="${payment.id}" class="payment-checkbox">
+            </td>
+            <td>${payment.formatted_date}</td>
+            <td>${payment.description}</td>
+            <td class="fw-bold text-success">${parseFloat(payment.amount).toLocaleString('tr-TR', {minimumFractionDigits: 2})} TL</td>
+            <td>${payment.reference_no || '-'}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Tüm ödemeleri seç/kaldır
+function toggleSelectAllPayments() {
+    const selectAll = document.getElementById('selectAllPayments');
+    const checkboxes = document.querySelectorAll('.payment-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
+
+// Tüm seçimleri kaldır
+function deselectAllPayments() {
+    const selectAll = document.getElementById('selectAllPayments');
+    const checkboxes = document.querySelectorAll('.payment-checkbox');
+    
+    selectAll.checked = false;
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+}
+
+// Seçilen ödemeleri ata
+function assignSelectedPayments() {
+    const checkboxes = document.querySelectorAll('.payment-checkbox:checked');
+    const paymentIds = Array.from(checkboxes).map(cb => cb.value);
+    
+    if (paymentIds.length === 0) {
+        alert('Lütfen en az bir ödeme seçin.');
+        return;
+    }
+    
+    if (!confirm('Seçilen ödemeleri bu öğrenciye atamak istediğinizden emin misiniz?')) {
+        return;
+    }
+    
+    // Global değişkenden öğrenci ID'sini al
+    const studentId = currentStudentId;
+    
+    // CSRF token'ı al
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    
+    fetch(`/admin/courses/{{ course.id }}/assign-payments/${studentId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            payment_ids: paymentIds
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload(); // Sayfayı yenile
+        } else {
+            alert('Hata: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Ödeme atama işlemi sırasında hata oluştu.');
+    });
+}
+
+
+
+// Tüm öğrencileri seç/kaldır
+function toggleSelectAllStudents() {
+    const selectAll = document.getElementById('selectAllStudents');
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
+
+// Ödemeyi silme fonksiyonu
+function deletePayment(paymentId, enrollmentId) {
+    if (!confirm('Bu ödemeyi silmek istediğinizden emin misiniz?')) {
+        return;
+    }
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    fetch(`/admin/courses/{{ course.id }}/delete-payment/${paymentId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload(); // Sayfayı yenile
+        } else {
+            alert('Hata: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Ödeme silme işlemi sırasında hata oluştu.');
+    });
+}
+
+// Bugünün tarihini ödeme tarihi alanına set et
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('paymentDate').value = today;
+});
+</script>
+{% endblock %} 

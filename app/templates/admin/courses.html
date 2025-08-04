@@ -1,0 +1,437 @@
+{% extends "base.html" %}
+
+{% block title %}Kurs Yönetimi - Admin{% endblock %}
+
+{% block content %}
+<div class="course-management-container">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="mb-0">Kurs Yönetimi</h2>
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Dashboard'a Dön
+                        </a>
+                        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#newCourseModal">
+                            <i class="bi bi-plus-circle"></i> Yeni Kurs Ekle
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Kurs Listesi -->
+                <div class="row">
+                    {% for course in courses %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card course-card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ course.name }}</h5>
+                                <div class="course-info-section">
+                                    <p class="card-text">
+                                        <strong>Eğitmen:</strong> {{ course.instructor_name }}<br>
+                                        <strong>Ücret:</strong> {{ "{:,.2f}".format(course.price) }} TL<br>
+                                        <strong>Durum:</strong> 
+                                        {% if course.is_active %}
+                                            <span class="badge bg-success">Aktif</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Pasif</span>
+                                        {% endif %}
+                                    </p>
+                                    {% if course.description %}
+                                    <p class="card-text"><small class="text-muted">{{ course.description }}</small></p>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Ders Saatleri -->
+                                {% if course.schedules %}
+                                <div class="course-info-section">
+                                    <small class="fw-bold text-dark"><i class="bi bi-clock"></i> Ders Saatleri:</small>
+                                    <div class="mt-2">
+                                        {% for schedule in course.schedules %}
+                                        <div class="course-schedule-item">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="text-muted">{{ schedule.day_of_week|turkish_day }}</span>
+                                                <span class="fw-bold">{{ schedule.start_time.strftime('%H:%M') }} - {{ schedule.end_time.strftime('%H:%M') }}</span>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Ödeme Bilgileri -->
+                                <div class="payment-status-section">
+                                    <small class="fw-bold text-dark"><i class="bi bi-cash-stack"></i> Ödeme Durumu:</small>
+                                    <div class="mt-2">
+                                        <div class="payment-item">
+                                            <span class="payment-label">Bekleyen:</span>
+                                            <span class="payment-value pending">{{ "{:,.2f}".format(course.pending_payment) }} TL</span>
+                                        </div>
+                                        <div class="payment-item">
+                                            <span class="payment-label">Tamamlanan:</span>
+                                            <span class="payment-value completed">{{ "{:,.2f}".format(course.total_completed_payment) }} TL</span>
+                                        </div>
+                                        <div class="payment-item">
+                                            <span class="payment-label">Öğrenci:</span>
+                                            <span class="payment-value total">{{ course.enrollments|selectattr('is_active', 'equalto', true)|list|length }}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Pasta Grafiği -->
+                                    <div class="chart-container">
+                                        <canvas id="paymentChart-{{ course.id }}" width="200" height="200"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <div class="course-actions">
+                                    <a href="{{ url_for('admin.manage_course', id=course.id) }}" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-gear"></i> Yönet
+                                    </a>
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" 
+                                                data-bs-toggle="modal" data-bs-target="#editCourseModal"
+                                                data-course-id="{{ course.id }}"
+                                                data-course-name="{{ course.name }}"
+                                                data-course-instructor="{{ course.instructor_name }}"
+                                                data-course-price="{{ course.price }}"
+                                                data-course-description="{{ course.description or '' }}"
+                                                data-course-active="{{ course.is_active|int }}">
+                                            <i class="bi bi-pencil"></i> Düzenle
+                                        </button>
+                                        <form method="POST" action="{{ url_for('admin.delete_course', id=course.id) }}" 
+                                              style="display: inline;" onsubmit="return confirm('Bu kursu silmek istediğinizden emin misiniz?')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                <i class="bi bi-trash"></i> Sil
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% if not courses %}
+                <div class="empty-state">
+                    <i class="bi bi-book"></i>
+                    <h4>Henüz kurs eklenmemiş</h4>
+                    <p>İlk kursu eklemek için "Yeni Kurs Ekle" butonuna tıklayın.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Yeni Kurs Modal -->
+<div class="modal fade course-modal" id="newCourseModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Yeni Kurs Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.new_course') }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <!-- Kurs Bilgileri -->
+                    <h6 class="fw-bold mb-3">Kurs Bilgileri</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Kurs Adı *</label>
+                                <input type="text" class="form-control" id="name" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="instructor_name" class="form-label">Eğitmen Adı *</label>
+                                <input type="text" class="form-control" id="instructor_name" name="instructor_name" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="price" class="form-label">Ücret *</label>
+                                <input type="number" class="form-control" id="price" name="price" min="0" step="0.01" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check mt-4">
+                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                                    <label class="form-check-label" for="is_active">
+                                        Aktif
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Açıklama</label>
+                        <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                    </div>
+                    
+                    <hr>
+                    
+                    <!-- Ders Saatleri -->
+                    <h6 class="fw-bold mb-3">Ders Saatleri</h6>
+                    <div id="scheduleContainer">
+                        <!-- Ders saatleri buraya dinamik olarak eklenecek -->
+                    </div>
+                    
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="addScheduleRow()">
+                        <i class="bi bi-plus-circle"></i> Ders Saati Ekle
+                    </button>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success">Kurs Ekle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Düzenle Kurs Modal -->
+<div class="modal fade course-modal" id="editCourseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Kurs Düzenle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.update_course') }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <input type="hidden" name="course_id" id="edit_course_id">
+                    
+                    <div class="mb-3">
+                        <label for="edit_course_name" class="form-label">Kurs Adı</label>
+                        <input type="text" class="form-control" id="edit_course_name" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_instructor_name" class="form-label">Eğitmen Adı</label>
+                        <input type="text" class="form-control" id="edit_instructor_name" name="instructor_name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_price" class="form-label">Ücret</label>
+                        <input type="number" class="form-control" id="edit_price" name="price" min="0" step="0.01" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">Açıklama</label>
+                        <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active">
+                            <label class="form-check-label" for="edit_is_active">
+                                Aktif
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary">Güncelle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Düzenle modal'ını açarken verileri yükle
+document.getElementById('editCourseModal').addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const courseId = button.getAttribute('data-course-id');
+    const courseName = button.getAttribute('data-course-name');
+    const instructorName = button.getAttribute('data-course-instructor');
+    const price = button.getAttribute('data-course-price');
+    const description = button.getAttribute('data-course-description');
+    const isActive = button.getAttribute('data-course-active');
+    
+    document.getElementById('edit_course_id').value = courseId;
+    document.getElementById('edit_course_name').value = courseName;
+    document.getElementById('edit_instructor_name').value = instructorName;
+    document.getElementById('edit_price').value = price;
+    document.getElementById('edit_description').value = description;
+    document.getElementById('edit_is_active').checked = isActive === '1';
+});
+
+// Ders saati ekleme fonksiyonu
+function addScheduleRow() {
+    const container = document.getElementById('scheduleContainer');
+    const scheduleIndex = container.children.length;
+    
+    const scheduleRow = document.createElement('div');
+    scheduleRow.className = 'schedule-row border rounded p-3 mb-3';
+    scheduleRow.innerHTML = `
+        <div class="row">
+            <div class="col-md-4">
+                <label class="form-label">Gün *</label>
+                <select class="form-select" name="schedules[${scheduleIndex}][day_of_week]" required>
+                    <option value="">Seçiniz</option>
+                    <option value="monday">Pazartesi</option>
+                    <option value="tuesday">Salı</option>
+                    <option value="wednesday">Çarşamba</option>
+                    <option value="thursday">Perşembe</option>
+                    <option value="friday">Cuma</option>
+                    <option value="saturday">Cumartesi</option>
+                    <option value="sunday">Pazar</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Başlangıç Saati *</label>
+                <input type="time" class="form-control" name="schedules[${scheduleIndex}][start_time]" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Bitiş Saati *</label>
+                <input type="time" class="form-control" name="schedules[${scheduleIndex}][end_time]" required>
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-12 text-end">
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeScheduleRow(this)">
+                    <i class="bi bi-trash"></i> Bu Ders Saatini Sil
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(scheduleRow);
+}
+
+// Ders saati silme fonksiyonu
+function removeScheduleRow(button) {
+    button.closest('.schedule-row').remove();
+    // Index'leri yeniden düzenle
+    reorderScheduleIndexes();
+}
+
+// Index'leri yeniden düzenleme fonksiyonu
+function reorderScheduleIndexes() {
+    const scheduleRows = document.querySelectorAll('.schedule-row');
+    scheduleRows.forEach((row, index) => {
+        const daySelect = row.querySelector('select[name*="[day_of_week]"]');
+        const startInput = row.querySelector('input[name*="[start_time]"]');
+        const endInput = row.querySelector('input[name*="[end_time]"]');
+        
+        if (daySelect) daySelect.name = `schedules[${index}][day_of_week]`;
+        if (startInput) startInput.name = `schedules[${index}][start_time]`;
+        if (endInput) endInput.name = `schedules[${index}][end_time]`;
+    });
+}
+
+// Form gönderimi öncesi kontrol
+document.getElementById('newCourseModal').addEventListener('show.bs.modal', function() {
+    // Modal açıldığında schedule container'ı temizle
+    document.getElementById('scheduleContainer').innerHTML = '';
+});
+
+// Form submit kontrolü
+document.querySelector('#newCourseModal form').addEventListener('submit', function(e) {
+    const scheduleRows = document.querySelectorAll('.schedule-row');
+    let hasValidSchedule = false;
+    
+    scheduleRows.forEach(row => {
+        const day = row.querySelector('select[name*="[day_of_week]"]').value;
+        const startTime = row.querySelector('input[name*="[start_time]"]').value;
+        const endTime = row.querySelector('input[name*="[end_time]"]').value;
+        
+        if (day && startTime && endTime) {
+            hasValidSchedule = true;
+        }
+    });
+    
+    if (scheduleRows.length > 0 && !hasValidSchedule) {
+        e.preventDefault();
+        alert('Lütfen en az bir ders saati ekleyin veya tüm alanları doldurun.');
+        return false;
+    }
+});
+
+// Pasta grafiklerini oluştur
+document.addEventListener('DOMContentLoaded', function() {
+    const courses = [
+        {% for course in courses %}
+        {
+            id: {{ course.id }},
+            price: {{ course.price }},
+            studentCount: {{ course.enrollments|selectattr('is_active', 'equalto', true)|list|length }},
+            pending: {{ course.pending_payment }},
+            completed: {{ course.total_completed_payment }},
+            expectedTotal: {{ course.price * (course.enrollments|selectattr('is_active', 'equalto', true)|list|length) }}
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    courses.forEach(course => {
+        if (course.expectedTotal > 0) {
+            const ctx = document.getElementById(`paymentChart-${course.id}`);
+            if (ctx) {
+                // Gerçek ödeme durumunu göster
+                let pendingAmount = course.pending;
+                let completedAmount = course.completed;
+                
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Bekleyen Ödeme', 'Tamamlanan Ödeme'],
+                        datasets: [{
+                            data: [pendingAmount, completedAmount],
+                            backgroundColor: [
+                                '#ffc107', // Sarı (Bekleyen)
+                                '#198754'  // Yeşil (Tamamlanan)
+                            ],
+                            borderColor: [
+                                '#ffc107',
+                                '#198754'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: {
+                                        size: 10
+                                    },
+                                    padding: 10
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.parsed;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return `${label}: ${value.toLocaleString('tr-TR', {minimumFractionDigits: 2})} TL (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

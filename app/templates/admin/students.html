@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Öğrenci Yönetimi - Admin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h3 mb-0">Öğrenci Yönetimi</h1>
+                <p class="text-muted">Arama, filtreleme, düzenleme ve silme işlemleri</p>
+            </div>
+            <div>
+                <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Dashboard'a Dön
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Arama ve Filtreler -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Öğrenci Listesi</h5>
+            </div>
+            <div class="card-body">
+                <!-- Arama ve Filtre Formu -->
+                <form method="GET" class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" name="search" 
+                               placeholder="Email, ad, soyad veya telefon ara..." 
+                               value="{{ search }}">
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" name="status">
+                            <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Tüm Durumlar</option>
+                            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Aktif</option>
+                            <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Pasif</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-search"></i> Ara
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Öğrenci Tablosu -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
+                                <th>Ad Soyad</th>
+                                <th>Email</th>
+                                <th>Telefon</th>
+                                <th>Kayıt Tarihi</th>
+                                <th>Durum</th>
+                                <th>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in students.items %}
+                            <tr>
+                                <td>{{ student.id }}</td>
+                                <td>
+                                    {% if student.student_profile %}
+                                        {{ student.student_profile.first_name }} {{ student.student_profile.last_name }}
+                                    {% else %}
+                                        <span class="text-muted">Profil yok</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ student.email }}</td>
+                                <td>
+                                    {% if student.student_profile and student.student_profile.phone %}
+                                        {{ student.student_profile.phone }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ student.created_at.strftime('%d.%m.%Y') }}</td>
+                                <td>
+                                    {% if student.is_active %}
+                                        <span class="badge bg-success">Aktif</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Pasif</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('admin.student_detail', id=student.id) }}" 
+                                           class="btn btn-sm btn-outline-primary" title="Görüntüle">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <form method="POST" action="{{ url_for('admin.toggle_student_status', id=student.id) }}" style="display: inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit" class="btn btn-sm btn-outline-warning" 
+                                                    onclick="return confirm('Bu öğrencinin hesap durumunu değiştirmek istediğinizden emin misiniz?')"
+                                                    title="{% if student.is_active %}Deaktif Et{% else %}Aktif Et{% endif %}">
+                                                <i class="bi bi-toggle-{% if student.is_active %}on{% else %}off{% endif %}"></i>
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('admin.delete_student', id=student.id) }}" style="display: inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                    onclick="return confirm('Bu öğrenci hesabını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!')"
+                                                    title="Sil">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                    Öğrenci bulunamadı
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Sayfalama -->
+                {% if students.pages > 1 %}
+                <nav aria-label="Sayfalama">
+                    <ul class="pagination justify-content-center">
+                        {% if students.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin.students', page=students.prev_num, search=search, status=status_filter) }}">
+                                    <i class="bi bi-chevron-left"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for page_num in students.iter_pages() %}
+                            {% if page_num %}
+                                {% if page_num != students.page %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('admin.students', page=page_num, search=search, status=status_filter) }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if students.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin.students', page=students.next_num, search=search, status=status_filter) }}">
+                                    <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

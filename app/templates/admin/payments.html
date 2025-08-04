@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+
+{% block title %}Ödeme Yönetimi - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="mb-0">Ödeme Yönetimi</h2>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Dashboard'a Dön
+                    </a>
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                        <i class="bi bi-upload"></i> Ekstre Yükle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- İstatistikler -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-credit-card display-4 text-primary"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="card-title mb-1">Toplam Ödeme</h6>
+                            <h3 class="mb-0">{{ total_payments }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-cash-stack display-4 text-success"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="card-title mb-1">Toplam Tutar</h6>
+                            <h3 class="mb-0">{{ "{:,.2f}".format(total_amount) }} TL</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-clock-history display-4 text-warning"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="card-title mb-1">Bekleyen Ödemeler</h6>
+                            <h3 class="mb-0">{{ pending_payments|length }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ana İçerik -->
+    <div class="row">
+        <!-- Sol Taraf - Tüm Ödemeler -->
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Tüm Ödemeler</h5>
+                        <div class="d-flex gap-2">
+                            <!-- Arama -->
+                            <form method="GET" class="d-flex gap-2">
+                                <input type="text" name="search" value="{{ search }}" class="form-control form-control-sm" placeholder="Açıklama ara...">
+                                <select name="date_filter" class="form-select form-select-sm">
+                                    <option value="">Tüm Tarihler</option>
+                                    <option value="today" {% if date_filter == 'today' %}selected{% endif %}>Bugün</option>
+                                    <option value="week" {% if date_filter == 'week' %}selected{% endif %}>Son 7 Gün</option>
+                                    <option value="month" {% if date_filter == 'month' %}selected{% endif %}>Son 30 Gün</option>
+                                </select>
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-search"></i> Ara
+                                </button>
+                                {% if search or date_filter %}
+                                <a href="{{ url_for('admin.payments') }}" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-x-circle"></i> Temizle
+                                </a>
+                                {% endif %}
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if payments.items %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Tarih</th>
+                                    <th>Açıklama</th>
+                                    <th>Tutar</th>
+                                    <th>Referans No</th>
+                                    <th>Kayıt Tarihi</th>
+                                    <th>İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in payments.items %}
+                                <tr>
+                                    <td>{{ payment.formatted_date }}</td>
+                                    <td>{{ payment.description }}</td>
+                                    <td class="fw-bold text-success">{{ payment.formatted_amount }}</td>
+                                    <td>{{ payment.reference_no or '-' }}</td>
+                                    <td>{{ payment.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('admin.delete_payment', id=payment.id) }}" 
+                                              style="display: inline;" onsubmit="return confirm('Bu ödemeyi silmek istediğinizden emin misiniz?')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                <i class="bi bi-trash"></i> Sil
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Sayfalama -->
+                    {% if payments.pages > 1 %}
+                    <nav aria-label="Ödeme sayfaları">
+                        <ul class="pagination justify-content-center">
+                            {% if payments.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin.payments', page=payments.prev_num, search=search, date_filter=date_filter) }}">Önceki</a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for page_num in payments.iter_pages() %}
+                                {% if page_num %}
+                                    {% if page_num != payments.page %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('admin.payments', page=page_num, search=search, date_filter=date_filter) }}">{{ page_num }}</a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                    {% endif %}
+                                {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if payments.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin.payments', page=payments.next_num, search=search, date_filter=date_filter) }}">Sonraki</a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                    
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-inbox display-4 text-muted"></i>
+                        <h5 class="mt-3 text-muted">Ödeme bulunamadı</h5>
+                        <p class="text-muted">Arama kriterlerinizi değiştirmeyi deneyin.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ Taraf - Bekleyen Ödemeler -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Bekleyen Ödemeler</h5>
+                    <small class="text-muted">Hiçbir kursa atanmamış ödemeler</small>
+                </div>
+                <div class="card-body">
+                    {% if pending_payments %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Tarih</th>
+                                    <th>Açıklama</th>
+                                    <th>Tutar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in pending_payments %}
+                                <tr>
+                                    <td>{{ payment.formatted_date }}</td>
+                                    <td>{{ payment.description }}</td>
+                                    <td class="fw-bold text-warning">{{ payment.formatted_amount }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-3">
+                        <i class="bi bi-check-circle display-4 text-success"></i>
+                        <h6 class="mt-2 text-muted">Bekleyen ödeme yok</h6>
+                        <p class="text-muted small">Tüm ödemeler kurslara atanmış</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ekstre Yükleme Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ekstre Yükle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Dosya Yükleme -->
+                <div id="uploadSection">
+                    <div class="mb-3">
+                        <label for="statementFile" class="form-label">Excel Dosyası Seçin</label>
+                        <input type="file" class="form-control" id="statementFile" accept=".xlsx,.xls">
+                        <div class="form-text">
+                            Dosya formatı: Excel (.xlsx, .xls)<br>
+                            Gerekli sütunlar: Tarih, Açıklama, Tutar
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="uploadFile()">
+                        <i class="bi bi-upload"></i> Dosyayı Yükle ve Analiz Et
+                    </button>
+                </div>
+
+                <!-- Önizleme -->
+                <div id="previewSection" style="display: none;">
+                    <h6 class="mb-3">Ödeme Önizlemesi</h6>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Kırmızı satırlar:</strong> Sistemde zaten mevcut olan kayıtlar<br>
+                        <strong>Yeşil satırlar:</strong> Yeni eklenecek kayıtlar
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-sm" id="previewTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                                    <th>Tarih</th>
+                                    <th>Açıklama</th>
+                                    <th>Tutar</th>
+                                    <th>Durum</th>
+                                </tr>
+                            </thead>
+                            <tbody id="previewTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="button" class="btn btn-secondary" onclick="resetUpload()">
+                            <i class="bi bi-arrow-clockwise"></i> Yeni Dosya
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="savePayments()">
+                            <i class="bi bi-check-circle"></i> Seçilenleri Kaydet
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let paymentData = [];
+
+function uploadFile() {
+    const fileInput = document.getElementById('statementFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Lütfen bir dosya seçin');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('csrf_token', '{{ csrf_token() }}');
+    
+    // Loading göster
+    const uploadBtn = document.querySelector('#uploadSection .btn-primary');
+    const originalText = uploadBtn.innerHTML;
+    uploadBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Yükleniyor...';
+    uploadBtn.disabled = true;
+    
+    fetch('/admin/payments/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        uploadBtn.innerHTML = originalText;
+        uploadBtn.disabled = false;
+        
+        if (data.success) {
+            paymentData = data.data;
+            showPreview(data.data);
+        } else {
+            alert('Hata: ' + data.error);
+        }
+    })
+    .catch(error => {
+        uploadBtn.innerHTML = originalText;
+        uploadBtn.disabled = false;
+        alert('Dosya yükleme hatası: ' + error);
+    });
+}
+
+function showPreview(data) {
+    const tbody = document.getElementById('previewTableBody');
+    tbody.innerHTML = '';
+    
+    data.forEach((item, index) => {
+        const row = document.createElement('tr');
+        row.className = item.exists ? 'table-danger' : 'table-success';
+        
+        const checkbox = item.exists ? 
+            '<input type="checkbox" disabled>' : 
+            `<input type="checkbox" onchange="updateSelection(${index})">`;
+        
+        const status = item.exists ? 
+            '<span class="badge bg-danger">Mevcut</span>' : 
+            '<span class="badge bg-success">Yeni</span>';
+        
+        row.innerHTML = `
+            <td>${checkbox}</td>
+            <td>${item.date}</td>
+            <td>${item.description}</td>
+            <td class="fw-bold">${item.amount.toLocaleString('tr-TR', {minimumFractionDigits: 2})} TL</td>
+            <td>${status}</td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+    
+    document.getElementById('uploadSection').style.display = 'none';
+    document.getElementById('previewSection').style.display = 'block';
+}
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('#previewTableBody input[type="checkbox"]:not(:disabled)');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
+
+function updateSelection(index) {
+    // Seçim güncelleme mantığı burada olabilir
+}
+
+function resetUpload() {
+    document.getElementById('statementFile').value = '';
+    document.getElementById('uploadSection').style.display = 'block';
+    document.getElementById('previewSection').style.display = 'none';
+    document.getElementById('selectAll').checked = false;
+    paymentData = [];
+}
+
+function savePayments() {
+    const checkboxes = document.querySelectorAll('#previewTableBody input[type="checkbox"]:checked');
+    const selectedPayments = [];
+    
+    checkboxes.forEach((checkbox, index) => {
+        const row = checkbox.closest('tr');
+        const rowIndex = Array.from(row.parentNode.children).indexOf(row);
+        selectedPayments.push(paymentData[rowIndex]);
+    });
+    
+    console.log('Selected payments:', selectedPayments); // Debug
+    
+    if (selectedPayments.length === 0) {
+        alert('Lütfen kaydedilecek ödemeleri seçin');
+        return;
+    }
+    
+    const requestData = {
+        payments: selectedPayments
+    };
+    
+    console.log('Sending data:', requestData); // Debug
+    
+    // CSRF token'ı al
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    
+    fetch('/admin/payments/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
+        console.log('Response status:', response.status); // Debug
+        console.log('Response headers:', response.headers); // Debug
+        return response.text(); // Önce text olarak al
+    })
+    .then(text => {
+        console.log('Response text:', text); // Debug
+        try {
+            const data = JSON.parse(text);
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Hata: ' + data.error);
+            }
+        } catch (e) {
+            console.error('JSON parse error:', e); // Debug
+            alert('Sunucu hatası: ' + text);
+        }
+    })
+    .catch(error => {
+        console.error('Fetch error:', error); // Debug
+        alert('Kaydetme hatası: ' + error);
+    });
+}
+</script>
+{% endblock %} 

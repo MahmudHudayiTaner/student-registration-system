@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Profil - Öğrenci{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="h3 mb-0 text-primary">
+                <i class="bi bi-person-circle me-2"></i>Profil Bilgileri
+            </h1>
+            <a href="{{ url_for('student.dashboard') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i> Dashboard'a Dön
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-person me-2"></i>Kişisel Bilgiler
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                {% if profile %}
+                    <div class="table-responsive">
+                        <table class="table table-borderless">
+                            <tbody>
+                                <tr>
+                                    <th width="150" class="fw-bold text-primary">Ad Soyad:</th>
+                                    <td>{{ profile.first_name }} {{ profile.last_name }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="fw-bold text-primary">Email:</th>
+                                    <td>{{ current_user.email }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="fw-bold text-primary">Doğum Tarihi:</th>
+                                    <td>{{ profile.birth_date.strftime('%d.%m.%Y') }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="fw-bold text-primary">Cinsiyet:</th>
+                                    <td>
+                                        {% if profile.gender == 'male' %}
+                                            Erkek
+                                        {% elif profile.gender == 'female' %}
+                                            Kadın
+                                        {% elif profile.gender == 'other' %}
+                                            Diğer
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th class="fw-bold text-primary">Telefon:</th>
+                                    <td>{{ profile.phone }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="fw-bold text-primary">Adres:</th>
+                                    <td>{{ profile.address }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="fw-bold text-primary">Kayıt Tarihi:</th>
+                                    <td>{{ current_user.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="fw-bold text-primary">Son Güncelleme:</th>
+                                    <td>{{ profile.updated_at.strftime('%d.%m.%Y %H:%M') if profile.updated_at else 'Yok' }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-primary">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Profil bilgileriniz henüz kaydedilmemiş.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightning-charge me-2"></i>Hızlı İşlemler
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="d-grid gap-3">
+                    <a href="{{ url_for('student.change_password') }}" class="btn btn-outline-warning">
+                        <i class="bi bi-key me-2"></i> Şifre Değiştir
+                    </a>
+                    <a href="{{ url_for('student.dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-house me-2"></i> Dashboard'a Dön
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-check-circle me-2"></i>Hesap Durumu
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">Durum:</span>
+                    <span class="badge bg-success">Aktif</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <span class="fw-bold">Son Giriş:</span>
+                    <span class="text-muted small">{{ current_user.updated_at.strftime('%d.%m.%Y %H:%M') if current_user.updated_at else 'Yok' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
