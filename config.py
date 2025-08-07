@@ -12,7 +12,7 @@ class Config:
     
     # PostgreSQL veritabanı ayarları
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'postgresql://username:password@localhost/language_course_db'
+        'sqlite:///kafka_app.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Database connection pool settings

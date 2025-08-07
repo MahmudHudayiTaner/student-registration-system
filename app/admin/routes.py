@@ -878,34 +878,34 @@ def upload_statement():
         # Dosyayı oku
         df = pd.read_excel(file)
         
-        # Sütun isimlerini temizle ve normalize et
+        # Sütun isimlerini temizle
         df.columns = df.columns.str.strip()
         
         # Gerekli sütunları kontrol et
-        required_columns = ['Tarih', 'Açıklama', 'Tutar']
+        required_columns = ['Tarih', 'Açıklama', 'İşlem Tutarı (TL)']
         available_columns = list(df.columns)
         
-        # Sütun eşleştirme (esnek kontrol)
+        # Sütun eşleştirme
         date_column = None
         description_column = None
         amount_column = None
         
         # Tarih sütunu için alternatif isimler
-        date_alternatives = ['Tarih', 'TARIH', 'Date', 'date', 'Tarih', 'TARIH']
+        date_alternatives = ['Tarih', 'TARIH', 'Date', 'date']
         for col in available_columns:
             if col in date_alternatives:
                 date_column = col
                 break
         
         # Açıklama sütunu için alternatif isimler
-        desc_alternatives = ['Açıklama', 'ACIKLAMA', 'Description', 'description', 'Açıklama', 'ACIKLAMA']
+        desc_alternatives = ['Açıklama', 'ACIKLAMA', 'Description', 'description']
         for col in available_columns:
             if col in desc_alternatives:
                 description_column = col
                 break
         
-        # Tutar sütunu için alternatif isimler
-        amount_alternatives = ['Tutar', 'TUTAR', 'Amount', 'amount', 'Tutar', 'TUTAR']
+        # İşlem Tutarı sütunu için alternatif isimler
+        amount_alternatives = ['İşlem Tutarı (TL)', 'İŞLEM TUTARI (TL)', 'Amount (TL)', 'amount (tl)', 'İşlem Tutarı', 'İŞLEM TUTARI', 'Tutar', 'TUTAR']
         for col in available_columns:
             if col in amount_alternatives:
                 amount_column = col
