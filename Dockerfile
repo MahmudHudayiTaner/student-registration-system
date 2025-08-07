@@ -17,8 +17,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Uygulama dosyalarını kopyala
 COPY . .
 
-# Port 5000'i aç
-EXPOSE 5000
-
-# Gunicorn ile çalıştır
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--timeout", "30", "--keep-alive", "2", "--max-requests", "1000", "--max-requests-jitter", "100", "run:app"] 
+# Diğer tüm satırlardan sonra, en sona ekleyin
+EXPOSE 80
+CMD ["gunicorn", "--bind", "0.0.0.0:80", "--workers", "3", "run:app"]
