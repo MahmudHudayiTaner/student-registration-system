@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}Kurs Programı - Öğrenci{% endblock %}
+
+{% block content %}
+<div class="admin-dashboard-bg">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="display-5 fw-bold text-primary mb-2">
+                        <i class="bi bi-book me-2"></i>Kurs Programı
+                    </h1>
+                    <p class="lead text-muted">Kayıtlı olduğunuz kursları ve program detaylarını görüntüleyin.</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('student.dashboard') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left me-2"></i>Dashboard'a Dön
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kurs Programı İçeriği -->
+    {% if enrollments %}
+        <div class="row">
+            {% for enrollment in enrollments %}
+            <div class="col-md-12 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0 fw-bold text-dark">
+                                <i class="bi bi-book me-2 text-primary"></i>{{ enrollment.course.name }}
+                            </h5>
+                            <span class="badge bg-success">Aktif</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row">
+                            <!-- Kurs Bilgileri -->
+                            <div class="col-md-6">
+                                <h6 class="fw-bold text-primary mb-3">
+                                    <i class="bi bi-info-circle me-2"></i>Kurs Bilgileri
+                                </h6>
+                                <div class="mb-3">
+                                    <strong>Eğitmen:</strong> {{ enrollment.course.instructor_name }}
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Kurs Ücreti:</strong> {{ "%.2f"|format(enrollment.course.price) }} TL
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Ödenen Tutar:</strong> 
+                                    <span class="text-success">{{ "%.2f"|format(enrollment.total_paid) }} TL</span>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Kalan Tutar:</strong> 
+                                    <span class="text-warning">{{ "%.2f"|format(enrollment.remaining_payment) }} TL</span>
+                                </div>
+                                {% if enrollment.course.description %}
+                                <div class="mb-3">
+                                    <strong>Açıklama:</strong>
+                                    <p class="text-muted mt-2">{{ enrollment.course.description }}</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Ders Programı -->
+                            <div class="col-md-6">
+                                <h6 class="fw-bold text-primary mb-3">
+                                    <i class="bi bi-calendar-event me-2"></i>Ders Programı
+                                </h6>
+                                                                 {% if enrollment.course.schedules %}
+                                     {% for schedule in enrollment.course.schedules %}
+                                     <div class="mb-3 p-3 bg-light rounded">
+                                         <div class="d-flex justify-content-between align-items-center">
+                                                                                           <div>
+                                                  <strong>{{ schedule.day_of_week|turkish_day }}</strong>
+                                              </div>
+                                             <div class="text-muted">
+                                                 {{ schedule.start_time.strftime('%H:%M') }} - {{ schedule.end_time.strftime('%H:%M') }}
+                                             </div>
+                                         </div>
+                                     </div>
+                                     {% endfor %}
+                                {% else %}
+                                    <div class="text-muted">
+                                        <i class="bi bi-exclamation-circle me-2"></i>
+                                        Ders programı henüz belirlenmemiş.
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                                                 <!-- Ödeme Durumu Progress Bar -->
+                         <div class="mt-4">
+                             <h6 class="fw-bold text-primary mb-2">
+                                 <i class="bi bi-credit-card me-2"></i>Ödeme Durumu
+                             </h6>
+                             {% set total_paid_float = enrollment.total_paid | float %}
+                             {% set course_price_float = enrollment.course.price | float %}
+                             {% set progress_percentage = (total_paid_float / course_price_float * 100) | round %}
+                             <div class="progress mb-2" style="height: 25px;">
+                                 <div class="progress-bar bg-success" role="progressbar" 
+                                      style="width: {{ progress_percentage }}%" 
+                                      aria-valuenow="{{ progress_percentage }}" 
+                                      aria-valuemin="0" 
+                                      aria-valuemax="100">
+                                     {{ progress_percentage }}%
+                                 </div>
+                             </div>
+                             <small class="text-muted">
+                                 {{ "%.2f"|format(enrollment.total_paid) }} TL / {{ "%.2f"|format(enrollment.course.price) }} TL
+                             </small>
+                                                  </div>
+                     </div>
+                 </div>
+             </div>
+             
+             <!-- Duyurular -->
+             {% if enrollment.course.announcements %}
+             <div class="col-md-12 mb-4">
+                 <div class="card border-0 shadow-sm">
+                     <div class="card-header bg-white border-0 py-3">
+                         <h5 class="mb-0 fw-bold text-dark">
+                             <i class="bi bi-megaphone me-2 text-info"></i>Duyurular
+                         </h5>
+                     </div>
+                     <div class="card-body p-4">
+                         {% for announcement in enrollment.course.announcements %}
+                         <div class="border-bottom pb-3 mb-3">
+                             <div class="mb-3">
+                                 <h6 class="fw-bold text-primary">{{ announcement.title }}</h6>
+                                 <p class="text-muted mb-2">{{ announcement.content }}</p>
+                                 <small class="text-muted">
+                                     <i class="bi bi-clock"></i> {{ announcement.created_at.strftime('%d.%m.%Y %H:%M') }}
+                                     {% if announcement.creator %}
+                                     <i class="bi bi-person ms-2"></i> {{ announcement.creator.display_name }}
+                                     {% endif %}
+                                 </small>
+                             </div>
+                             
+                             <!-- Emoji Tepki Bölümü -->
+                             <div class="d-flex gap-2 mb-2">
+                                 <button type="button" class="btn btn-outline-primary btn-sm" 
+                                         onclick="showReactionModal({{ announcement.id }})">
+                                     <i class="bi bi-emoji-smile"></i> Emoji
+                                 </button>
+                             </div>
+                             
+                             <!-- Mevcut Emoji Tepkileri -->
+                             {% if announcement.reactions %}
+                             <div class="mt-3">
+                                 <h6 class="fw-bold text-muted mb-2">Emoji Tepkileri:</h6>
+                                 <div class="d-flex gap-2 flex-wrap">
+                                     {% set emoji_counts = {} %}
+                                     {% for reaction in announcement.reactions %}
+                                         {% set emoji = reaction.emoji %}
+                                         {% if emoji not in emoji_counts %}
+                                             {% set _ = emoji_counts.update({emoji: 1}) %}
+                                         {% else %}
+                                             {% set _ = emoji_counts.update({emoji: emoji_counts[emoji] + 1}) %}
+                                         {% endif %}
+                                     {% endfor %}
+                                     
+                                     {% for emoji, count in emoji_counts.items() %}
+                                     <div class="d-flex align-items-center bg-light rounded px-2 py-1">
+                                         <span class="fs-5 me-1">{{ emoji }}</span>
+                                         <small class="text-muted">{{ count }}</small>
+                                     </div>
+                                     {% endfor %}
+                                 </div>
+                             </div>
+                             {% endif %}
+                         </div>
+                         {% endfor %}
+                     </div>
+                 </div>
+             </div>
+             {% endif %}
+             {% endfor %}
+         </div>
+    {% else %}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-5">
+                        <div class="text-center">
+                            <i class="bi bi-book fs-1 text-muted mb-4 d-block"></i>
+                            <h4 class="text-muted mb-3">Henüz Bir Kursa Kayıtlı Değilsiniz</h4>
+                            <p class="text-muted mb-4">
+                                Şu anda aktif bir kurs kaydınız bulunmuyor. Kurs kaydı yapmak için yönetici ile iletişime geçebilirsiniz.
+                            </p>
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>Bilgi:</strong> Kurs kaydı yapıldığında bu sayfada kurs bilgileriniz ve ders programınız görüntülenecektir.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Tepki Modal -->
+<div class="modal fade" id="reactionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reactionModalTitle">Tepki Ver</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="reactionForm">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <!-- Emoji Seçimi -->
+                    <div>
+                        <label class="form-label">Emoji Seçin:</label>
+                        <div class="d-flex gap-2 mb-3 flex-wrap">
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('👍', event)">👍</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('❤️', event)">❤️</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('😊', event)">😊</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('🎉', event)">🎉</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('👏', event)">👏</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('🔥', event)">🔥</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('😍', event)">😍</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('🤩', event)">🤩</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('😎', event)">😎</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('🎯', event)">🎯</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('⭐', event)">⭐</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('💯', event)">💯</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('🚀', event)">🚀</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('💪', event)">💪</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('🎊', event)">🎊</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('🏆', event)">🏆</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('💡', event)">💡</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('🎨', event)">🎨</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('🎵', event)">🎵</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('🌈', event)">🌈</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('😔', event)">😔</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="selectEmoji('😢', event)">😢</button>
+                        </div>
+                        <input type="hidden" name="emoji" id="selectedEmoji">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentAnnouncementId = null;
+
+function showReactionModal(announcementId) {
+    currentAnnouncementId = announcementId;
+    document.getElementById('reactionForm').action = `/student/announcements/${announcementId}/react`;
+    document.getElementById('reactionModalTitle').textContent = 'Emoji Seçin';
+    
+    new bootstrap.Modal(document.getElementById('reactionModal')).show();
+}
+
+function selectEmoji(emoji, event) {
+    document.getElementById('selectedEmoji').value = emoji;
+    // Seçilen emojiyi vurgula
+    document.querySelectorAll('.modal-body button').forEach(btn => {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-secondary');
+    });
+    event.target.classList.remove('btn-outline-secondary');
+    event.target.classList.add('btn-primary');
+    
+    // Emoji seçildikten sonra otomatik olarak formu gönder
+    setTimeout(() => {
+        document.getElementById('reactionForm').submit();
+    }, 300);
+}
+</script>
+</div>
+
+<style>
+.admin-dashboard-bg {
+    background: linear-gradient(135deg, var(--kafka-light) 0%, #e9ecef 100%);
+    min-height: 100vh;
+    padding: 2rem 0;
+}
+
+.card {
+    border-radius: 15px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1) !important;
+}
+
+.card-header {
+    border-radius: 15px 15px 0 0 !important;
+}
+
+.btn {
+    border-radius: 10px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.display-5 {
+    font-size: 2.5rem;
+}
+
+.text-primary {
+    color: var(--kafka-primary) !important;
+}
+
+.text-info {
+    color: var(--kafka-accent) !important;
+}
+
+.text-success {
+    color: var(--kafka-success) !important;
+}
+
+.text-warning {
+    color: var(--kafka-warning) !important;
+}
+
+.opacity-75 {
+    opacity: 0.75;
+}
+
+.shadow-sm {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .display-5 {
+        font-size: 2rem;
+    }
+    
+    .card-body {
+        padding: 1.5rem;
+    }
+}
+</style>
+{% endblock %} 

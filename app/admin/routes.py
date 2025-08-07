@@ -1,25 +1,48 @@
-from flask import render_template, redirect, url_for, flash, request, abort, jsonify
+from flask import render_template, redirect, url_for, flash, request, abort, jsonify, send_file
 from flask_login import login_required, current_user
 from app.admin import admin
 from app.models.user import User
 from app.models.student_profile import StudentProfile
-from app.models.course import Course, CourseSchedule, CourseEnrollment, CoursePayment
+from app.models.admin_profile import AdminProfile
+from app.models.course import Course, CourseSchedule, CourseEnrollment, CoursePayment, CourseAnnouncement, AnnouncementReaction
 from app.models.payment import Payment
-from app.admin.forms import CourseForm, AdminPasswordChangeForm
+from app.admin.forms import CourseForm, AdminPasswordChangeForm, AdminProfileForm
 from app import db
 from functools import wraps
+from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta
 import pandas as pd
 import os
 from werkzeug.utils import secure_filename
 from flask_wtf.csrf import validate_csrf
 from werkzeug.security import generate_password_hash
+import re
+from markupsafe import escape
+from flask import session
+import time
+from bs4 import BeautifulSoup
 
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or current_user.role != 'admin':
             abort(403)
+        
+        # Rate limiting for admin actions
+        current_time = time.time()
+        admin_actions = session.get('admin_actions', [])
+        
+        # Remove actions older than 1 minute
+        admin_actions = [action for action in admin_actions if current_time - action < 60]
+        
+        # Limit to 30 actions per minute
+        if len(admin_actions) >= 30:
+            flash('Çok fazla işlem yapıyorsunuz. Lütfen bekleyin.', 'error')
+            return redirect(url_for('admin.dashboard'))
+        
+        admin_actions.append(current_time)
+        session['admin_actions'] = admin_actions
+        
         return f(*args, **kwargs)
     return decorated_function
 
@@ -81,13 +104,19 @@ def students():
     query = User.query.filter_by(role='student')
     
     if search:
-        query = query.filter(
-            db.or_(
-                User.email.contains(search),
-                User.first_name.contains(search),
-                User.last_name.contains(search)
+        # Input sanitization
+        sanitized_search = re.sub(r'[^\w\s@.-]', '', search.strip())
+        if sanitized_search:
+            query = query.filter(
+                db.or_(
+                    User.email.contains(sanitized_search),
+                    User.student_profile.has(db.or_(
+                        StudentProfile.first_name.contains(sanitized_search),
+                        StudentProfile.last_name.contains(sanitized_search),
+                        StudentProfile.phone.contains(sanitized_search)
+                    ))
+                )
             )
-        )
     
     if status_filter:
         if status_filter == 'active':
@@ -107,6 +136,10 @@ def students():
 @admin_required
 def student_detail(id):
     """Öğrenci detay sayfası"""
+    # ID validation
+    if not isinstance(id, int) or id <= 0:
+        abort(404)
+    
     student = User.query.get_or_404(id)
     if student.role != 'student':
         abort(404)
@@ -323,10 +356,74 @@ def manage_course(id):
         ~User.id.in_(enrolled_student_ids)
     ).all()
     
+    # Kurs duyuruları
+    announcements = CourseAnnouncement.query.options(joinedload(CourseAnnouncement.creator)).filter_by(course_id=id).order_by(CourseAnnouncement.created_at.desc()).all()
+    
     return render_template('admin/manage_course.html', 
                          course=course, 
                          enrollments=enrollments,
-                         available_students=available_students)
+                         available_students=available_students,
+                         announcements=announcements)
+
+@admin.route('/courses/<int:id>/export-students')
+@login_required
+@admin_required
+def export_course_students(id):
+    """Kursa kayıtlı öğrencilerin adres bilgilerini Excel formatında indir"""
+    course = Course.query.get_or_404(id)
+    
+    # Kursa kayıtlı öğrencileri al
+    enrollments = CourseEnrollment.query.filter_by(course_id=id, is_active=True).all()
+    
+    if not enrollments:
+        flash('Bu kursa kayıtlı öğrenci bulunamadı.', 'warning')
+        return redirect(url_for('admin.manage_course', id=id))
+    
+    # Excel için veri hazırla
+    data = []
+    for enrollment in enrollments:
+        student = enrollment.student
+        profile = student.student_profile
+        
+        # Ad soyad bilgilerini al
+        first_name = profile.first_name if profile and profile.first_name else ''
+        last_name = profile.last_name if profile and profile.last_name else ''
+        # Telefon bilgisini al
+        phone = profile.phone if profile and profile.phone else ''
+        
+        # Adres bilgisini al (StudentProfile'da address alanı varsa)
+        address = profile.address if profile and hasattr(profile, 'address') and profile.address else ''
+        
+        data.append({
+            'İsim': first_name,
+            'Soyisim': last_name,
+            'Telefon': phone,
+            'Adres': address,
+            'Email': student.email
+        })
+    
+    # DataFrame oluştur
+    df = pd.DataFrame(data)
+    
+    # Excel dosyası oluştur
+    from io import BytesIO
+    output = BytesIO()
+    
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Öğrenci Adresleri', index=False)
+    
+    output.seek(0)
+    
+    # Dosya adını hazırla
+    filename = f"{course.name}_ogrenci_adresleri_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = secure_filename(filename)
+    
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 @admin.route('/courses/<int:id>/enroll-students', methods=['POST'])
 @login_required
@@ -371,6 +468,100 @@ def enroll_students(id):
     except Exception as e:
         db.session.rollback()
         flash('Öğrenci eklenirken hata oluştu.', 'error')
+    
+    return redirect(url_for('admin.manage_course', id=id))
+
+@admin.route('/courses/<int:id>/announcements/add', methods=['POST'])
+@login_required
+@admin_required
+def add_announcement(id):
+    """Kursa duyuru ekleme"""
+    try:
+        validate_csrf(request.form.get('csrf_token'))
+    except:
+        flash('Güvenlik hatası. Lütfen tekrar deneyin.', 'error')
+        return redirect(url_for('admin.manage_course', id=id))
+    
+    course = Course.query.get_or_404(id)
+    
+    # HTML içeriğini güvenli şekilde işle
+ 
+    import re
+    
+    def sanitize_html(text):
+        """HTML içeriğini güvenli hale getir"""
+        # Sadece izin verilen HTML etiketlerini kabul et
+        allowed_tags = ['strong', 'em', 'u', 'p', 'ul', 'li', 'br']
+        allowed_attrs = {}
+        
+        # HTML'i parse et
+        soup = BeautifulSoup(text, 'html.parser')
+        
+        # İzin verilmeyen etiketleri kaldır
+        for tag in soup.find_all():
+            if tag.name not in allowed_tags:
+                tag.unwrap()
+        
+        # Sadece izin verilen etiketleri bırak
+        for tag in soup.find_all():
+            if tag.name not in allowed_tags:
+                tag.replace_with(tag.get_text())
+        
+        return str(soup)
+    
+    title = request.form.get('title', '').strip()
+    content = request.form.get('content', '').strip()
+    
+    # HTML içeriğini temizle
+    title = sanitize_html(title)
+    content = sanitize_html(content)
+    
+    if not title or not content:
+        flash('Başlık ve içerik alanları zorunludur.', 'error')
+        return redirect(url_for('admin.manage_course', id=id))
+    
+    try:
+        announcement = CourseAnnouncement(
+            course_id=id,
+            title=title,
+            content=content,
+            created_by=current_user.id
+        )
+        db.session.add(announcement)
+        db.session.commit()
+        flash('Duyuru başarıyla eklendi.', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash('Duyuru eklenirken hata oluştu.', 'error')
+    
+    return redirect(url_for('admin.manage_course', id=id))
+
+@admin.route('/courses/<int:id>/announcements/<int:announcement_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_announcement(id, announcement_id):
+    """Kurs duyurusunu hard silme"""
+    try:
+        validate_csrf(request.form.get('csrf_token'))
+    except:
+        flash('Güvenlik hatası. Lütfen tekrar deneyin.', 'error')
+        return redirect(url_for('admin.manage_course', id=id))
+    
+    announcement = CourseAnnouncement.query.filter_by(
+        course_id=id, 
+        id=announcement_id
+    ).first_or_404()
+    
+    try:
+        # Duyuruyu veritabanından tamamen sil
+        db.session.delete(announcement)
+        db.session.commit()
+        flash('Duyuru başarıyla silindi.', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash('Duyuru silinirken hata oluştu.', 'error')
     
     return redirect(url_for('admin.manage_course', id=id))
 
@@ -429,13 +620,12 @@ def get_pending_payments(id, student_id):
         # JSON formatına çevir
         payments_data = []
         for payment in pending_payments:
-            payments_data.append({
-                'id': payment.id,
-                'formatted_date': payment.formatted_date,
-                'description': payment.description,
-                'amount': str(payment.amount),
-                'reference_no': payment.reference_no
-            })
+                         payments_data.append({
+                 'id': payment.id,
+                 'formatted_date': payment.formatted_date,
+                 'description': payment.description,
+                 'amount': str(payment.amount)
+             })
         
         return jsonify({
             'success': True,
@@ -488,9 +678,8 @@ def assign_payments_to_student_post(id, student_id):
                             payment_id=payment_id,
                             amount=payment.amount,
                             payment_date=payment.transaction_date,
-                            payment_method='otomatik_atama',
-                            reference_no=payment.reference_no,
-                            notes=f'Ödeme ataması - {payment.description}',
+                                                     payment_method='otomatik_atama',
+                         notes=f'Ödeme ataması - {payment.description}',
                             created_by=current_user.id
                         )
                         db.session.add(course_payment)
@@ -524,13 +713,20 @@ def payments():
     
     # Arama filtresi
     if search:
-        query = query.filter(
-            db.or_(
-                Payment.description.contains(search),
-                Payment.reference_no.contains(search)
+        # Önce search'in sayısal olup olmadığını kontrol et
+        try:
+            search_amount = float(search)
+            # Eğer sayısal ise, amount alanında tam eşleşme ara
+            query = query.filter(
+                db.or_(
+                    Payment.description.contains(search),
+                    Payment.amount == search_amount
+                )
             )
-        )
-    
+        except ValueError:
+            # Eğer sayısal değilse, sadece description'da ara
+            query = query.filter(Payment.description.contains(search))
+
     # Tarih filtresi
     if date_filter:
         if date_filter == 'today':
@@ -588,14 +784,75 @@ def delete_payment(id):
     payment = Payment.query.get_or_404(id)
     
     try:
-        payment.is_active = False
+        # 1. Önce bu payment'a ait CoursePayment kayıtlarını sil
+        from app.models.course import CoursePayment
+        course_payments = CoursePayment.query.filter_by(payment_id=id).all()
+        for course_payment in course_payments:
+            db.session.delete(course_payment)
+        
+        # 2. Sonra Payment kaydını sil
+        db.session.delete(payment)
         db.session.commit()
         flash('Ödeme başarıyla silindi.', 'success')
     except Exception as e:
         db.session.rollback()
+        print(f"Payment deletion error: {e}")  # Debug için
         flash('Ödeme silinirken hata oluştu.', 'error')
     
     return redirect(url_for('admin.payments'))
+
+@admin.route('/payments/bulk-delete', methods=['POST'])
+@login_required
+@admin_required
+def bulk_delete_payments():
+    """Toplu ödeme silme"""
+    try:
+        # CSRF token kontrolü
+        csrf_token = request.headers.get('X-CSRFToken')
+        if not csrf_token:
+            return jsonify({'success': False, 'error': 'CSRF token eksik'})
+        
+        try:
+            validate_csrf(csrf_token)
+        except Exception as e:
+            return jsonify({'success': False, 'error': 'Güvenlik hatası'})
+        
+        # JSON verilerini al
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Geçersiz veri formatı'})
+        
+        payment_ids = data.get('payment_ids', [])
+        
+        if not payment_ids:
+            return jsonify({'success': False, 'error': 'Silinecek ödeme seçilmedi'})
+        
+        try:
+            deleted_count = 0
+            for payment_id in payment_ids:
+                payment = Payment.query.get(payment_id)
+                if payment and payment.is_active:
+                    # 1. Önce bu payment'a ait CoursePayment kayıtlarını sil
+                    course_payments = CoursePayment.query.filter_by(payment_id=payment_id).all()
+                    for course_payment in course_payments:
+                        db.session.delete(course_payment)
+                    
+                    # 2. Sonra Payment kaydını sil
+                    db.session.delete(payment)
+                    deleted_count += 1
+            
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'message': f'{deleted_count} ödeme başarıyla silindi'
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': f'Toplu silme işlemi sırasında hata oluştu: {str(e)}'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Veri işleme hatası: {str(e)}'})
 
 @admin.route('/payments/upload', methods=['POST'])
 @login_required
@@ -665,7 +922,7 @@ def upload_statement():
             
             return jsonify({
                 'success': False, 
-                'error': f'Eksik sütunlar: {", ".join(missing_columns)}. Mevcut sütunlar: {", ".join(available_columns)}'
+                'error': f'Sütun isimlerinde problem var. \nŞu sütunlar eksik: {", ".join(missing_columns)} \nBu sütunlar tespit edildi: {", ".join(available_columns)}'
             })
         
         # Boş satırları temizle
@@ -677,11 +934,21 @@ def upload_statement():
         # Pozitif tutarları filtrele
         positive_payments = df[df[amount_column] > 0].copy()
         
+        # Minimum tutar filtresi uygula
+        min_amount = request.form.get('min_amount')
+        if min_amount:
+            try:
+                min_amount_float = float(min_amount)
+                positive_payments = positive_payments[positive_payments[amount_column] >= min_amount_float]
+            except ValueError:
+                return jsonify({'success': False, 'error': 'Geçersiz minimum tutar değeri'})
+        
         if positive_payments.empty:
-            return jsonify({'success': False, 'error': 'Pozitif tutarlı ödeme bulunamadı'})
+            return jsonify({'success': False, 'error': 'Filtre kriterlerine uygun ödeme bulunamadı'})
         
         # Mevcut kayıtları kontrol et
         processed_data = []
+
         for index, row in positive_payments.iterrows():
             try:
                 # Tarihi parse et
@@ -837,4 +1104,33 @@ def change_password():
         db.session.commit()
         flash('Şifre başarıyla değiştirildi.', 'success')
         return redirect(url_for('admin.dashboard'))
-    return render_template('admin/change_password.html', title='Şifre Değiştir', form=form) 
+    return render_template('admin/change_password.html', title='Şifre Değiştir', form=form)
+
+@admin.route('/profile', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def profile():
+    """Admin profil yönetimi"""
+    # Mevcut profili al veya oluştur
+    profile = AdminProfile.query.filter_by(user_id=current_user.id).first()
+    if not profile:
+        profile = AdminProfile(user_id=current_user.id)
+        db.session.add(profile)
+        db.session.commit()
+    
+    form = AdminProfileForm(obj=profile)
+    
+    if form.validate_on_submit():
+        profile.first_name = form.first_name.data
+        profile.last_name = form.last_name.data
+        profile.phone = form.phone.data
+        
+        try:
+            db.session.commit()
+            flash('Profil başarıyla güncellendi.', 'success')
+            return redirect(url_for('admin.profile'))
+        except Exception as e:
+            db.session.rollback()
+            flash('Profil güncellenirken hata oluştu.', 'error')
+    
+    return render_template('admin/profile.html', form=form, profile=profile) 

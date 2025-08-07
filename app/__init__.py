@@ -1,4 +1,4 @@
-from flask import Flask, redirect, url_for, render_template, request, session
+from flask import Flask, redirect, url_for, render_template, request, session, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_mail import Mail
@@ -23,12 +23,44 @@ def create_app(config_name='default'):
     # Security configurations
     app.config['SESSION_COOKIE_SECURE'] = True if not app.debug else False
     app.config['SESSION_COOKIE_HTTPONLY'] = True
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'  # Changed from 'Lax' to 'Strict'
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Reduced from 24 to 8 hours
     
     # CSRF protection
-    app.config['WTF_CSRF_TIME_LIMIT'] = 3600  # 1 hour
+    app.config['WTF_CSRF_TIME_LIMIT'] = 1800  # Reduced from 1 hour to 30 minutes
     app.config['WTF_CSRF_SSL_STRICT'] = True if not app.debug else False
+    
+    # Additional security headers
+    @app.after_request
+    def add_security_headers(response):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        return response
+    
+    # Security middleware
+    @app.before_request
+    def security_checks():
+        # Check for suspicious patterns in request
+        if request.method == 'POST':
+            # Check for potential SQL injection patterns
+            suspicious_patterns = [
+                'union', 'select', 'insert', 'update', 'delete', 'drop', 'create',
+                'script', 'javascript', 'onload', 'onerror', 'onclick'
+            ]
+            
+            for pattern in suspicious_patterns:
+                if pattern in request.form.get('csrf_token', '').lower():
+                    abort(403)
+            
+            # Check for potential XSS patterns
+            xss_patterns = ['<script', 'javascript:', 'vbscript:', 'onload=']
+            for key, value in request.form.items():
+                if isinstance(value, str):
+                    for pattern in xss_patterns:
+                        if pattern in value.lower():
+                            abort(403)
 
     # Extensions initialization
     db.init_app(app)
@@ -76,7 +108,6 @@ def create_app(config_name='default'):
     @app.route('/')
     def index():
         from flask_login import current_user
-        
         if current_user.is_authenticated:
             if current_user.role == 'admin':
                 return redirect(url_for('admin.dashboard'))
@@ -87,8 +118,12 @@ def create_app(config_name='default'):
 
     # Create database tables and default admin user
     with app.app_context():
-        db.create_all()
-        create_default_admin()
+        try:
+            db.create_all()
+            create_default_admin()
+        except Exception as e:
+            print(f"❌ Database initialization error: {e}")
+            # Continue without failing the app startup
 
     return app
 
@@ -107,8 +142,6 @@ def register_error_handlers(app):
     def internal_error(error):
         db.session.rollback()
         return render_template('errors/500.html'), 500
-
-
 
 def create_default_admin():
     """Create default admin user if it doesn't exist"""
@@ -138,4 +171,7 @@ def create_default_admin():
 
     except Exception as e:
         print(f"❌ Error creating default admin user: {e}")
-        db.session.rollback() 
+        try:
+            db.session.rollback()
+        except:
+            pass  # Ignore rollback errors 

@@ -1,23 +1,25 @@
 from flask import render_template, redirect, url_for, flash, request, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app.auth import auth
-from app.auth.forms import LoginForm, RegisterForm
+from app.auth.forms import LoginForm, RegisterForm, ForgotPasswordForm, ResetPasswordForm
 from app.models.user import User
 from app.models.student_profile import StudentProfile
-from app import db
-from datetime import datetime
+from app import db, mail
+from datetime import datetime, timedelta
 import re
+import secrets
+from flask_mail import Message
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        # Redirect based on role
         if current_user.role == 'admin':
             return redirect(url_for('admin.dashboard'))
         else:
             return redirect(url_for('student.dashboard'))
     
     form = LoginForm()
+    
     if form.validate_on_submit():
         # Input sanitization
         email = re.sub(r'[^\w@.-]', '', form.email.data.strip().lower())
@@ -98,6 +100,104 @@ def register():
             print(f"Registration error: {e}")
     
     return render_template('auth/register.html', form=form)
+
+@auth.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Şifremi unuttum sayfası"""
+    if current_user.is_authenticated:
+        return redirect(url_for('student.dashboard'))
+    
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        # Input sanitization
+        email = re.sub(r'[^\w@.-]', '', form.email.data.strip().lower())
+        
+        user = User.query.filter_by(email=email).first()
+        if user and user.is_active:
+            # Token oluştur
+            token = secrets.token_urlsafe(32)
+            user.reset_token = token
+            user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+            db.session.commit()
+            
+            # Email gönder
+            try:
+                reset_url = url_for('auth.reset_password', token=token, _external=True)
+                msg = Message(
+                    subject='Şifre Sıfırlama - Kafka Dil Akademisi',
+                    recipients=[user.email]
+                )
+                
+                msg.html = f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #333;">Şifre Sıfırlama</h2>
+                    <p>Merhaba,</p>
+                    <p>Şifrenizi sıfırlamak için aşağıdaki linke tıklayın:</p>
+                    <p style="margin: 20px 0;">
+                        <a href="{reset_url}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                            Şifremi Sıfırla
+                        </a>
+                    </p>
+                    <p><strong>Bu link 1 saat sonra geçersiz olacaktır.</strong></p>
+                    <p>Eğer bu isteği siz yapmadıysanız, bu emaili görmezden gelebilirsiniz.</p>
+                    <hr style="margin: 20px 0;">
+                    <p style="color: #666; font-size: 12px;">
+                        Kafka Dil Akademisi<br>
+                        Bu email otomatik olarak gönderilmiştir.
+                    </p>
+                </div>
+                """
+                
+                # Gerçek email gönder
+                mail.send(msg)
+                
+                flash('Şifre sıfırlama linki email adresinize gönderildi. Lütfen email kutunuzu kontrol edin.', 'success')
+                
+            except Exception as e:
+                # Token'ı temizle
+                user.reset_token = None
+                user.reset_token_expires = None
+                db.session.commit()
+                flash('Email gönderilirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.', 'error')
+                print(f"Email sending error: {e}")
+        else:
+            # Güvenlik için aynı mesajı göster
+            flash('Şifre sıfırlama linki email adresinize gönderildi. Lütfen email kutunuzu kontrol edin.', 'success')
+        
+        return redirect(url_for('auth.login'))
+    
+    return render_template('auth/forgot_password.html', form=form)
+
+@auth.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    """Şifre sıfırlama sayfası"""
+    if current_user.is_authenticated:
+        return redirect(url_for('student.dashboard'))
+    
+    # Token'ı kontrol et
+    user = User.query.filter_by(reset_token=token).first()
+    if not user or not user.reset_token_expires or user.reset_token_expires < datetime.utcnow():
+        flash('Geçersiz veya süresi dolmuş şifre sıfırlama linki.', 'error')
+        return redirect(url_for('auth.login'))
+    
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        try:
+            # Şifreyi güncelle
+            user.set_password(form.password.data)
+            user.reset_token = None
+            user.reset_token_expires = None
+            db.session.commit()
+            
+            flash('Şifreniz başarıyla güncellendi. Şimdi yeni şifrenizle giriş yapabilirsiniz.', 'success')
+            return redirect(url_for('auth.login'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash('Şifre güncellenirken bir hata oluştu. Lütfen tekrar deneyin.', 'error')
+            print(f"Password reset error: {e}")
+    
+    return render_template('auth/reset_password.html', form=form, token=token)
 
 @auth.route('/logout')
 @login_required

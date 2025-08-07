@@ -17,6 +17,7 @@ class Course(db.Model):
     # Relationships
     schedules = db.relationship('CourseSchedule', backref='course', cascade='all, delete-orphan')
     enrollments = db.relationship('CourseEnrollment', backref='course', cascade='all, delete-orphan')
+    announcements = db.relationship('CourseAnnouncement', backref='course', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<Course {self.name}>'
@@ -93,7 +94,6 @@ class CoursePayment(db.Model):
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     payment_date = db.Column(db.Date, nullable=False)
     payment_method = db.Column(db.String(50))  # nakit, kart, havale vb.
-    reference_no = db.Column(db.String(50))
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -103,4 +103,39 @@ class CoursePayment(db.Model):
     payment = db.relationship('Payment', foreign_keys=[payment_id])  # Genel ödeme ile bağlantı
     
     def __repr__(self):
-        return f'<CoursePayment {self.amount} TL - {self.enrollment.student.email}>' 
+        return f'<CoursePayment {self.amount} TL - {self.enrollment.student.email}>'
+
+class CourseAnnouncement(db.Model):
+    """Kurs duyuruları"""
+    __tablename__ = 'course_announcements'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Relationships
+    creator = db.relationship('User', foreign_keys=[created_by])
+    reactions = db.relationship('AnnouncementReaction', backref='announcement', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<CourseAnnouncement {self.title} - {self.course.name}>'
+
+class AnnouncementReaction(db.Model):
+    """Duyuru emoji tepkileri"""
+    __tablename__ = 'announcement_reactions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    announcement_id = db.Column(db.Integer, db.ForeignKey('course_announcements.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    emoji = db.Column(db.String(10), nullable=False)  # Emoji karakteri (👍, ❤️, 😊, vb.)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    student = db.relationship('User', foreign_keys=[student_id])
+    
+    def __repr__(self):
+        return f'<AnnouncementReaction {self.emoji} - {self.student.email}>' 

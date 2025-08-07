@@ -12,6 +12,9 @@
                     <a href="{{ url_for('admin.courses') }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-left"></i> Kurslara Dön
                     </a>
+                    <a href="{{ url_for('admin.export_course_students', id=course.id) }}" class="btn btn-info">
+                        <i class="bi bi-download"></i> Adres Listesi İndir
+                    </a>
                     <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addStudentsModal">
                         <i class="bi bi-person-plus"></i> Öğrenci Ekle
                     </button>
@@ -84,7 +87,6 @@
                                 <tr>
                                     <th>Öğrenci</th>
                                     <th>Email</th>
-                                    <th>Kayıt Tarihi</th>
                                     <th>Ödenen</th>
                                     <th>Kalan</th>
                                     <th>İşlemler</th>
@@ -111,7 +113,6 @@
                                         </div>
                                     </td>
                                     <td>{{ enrollment.student.email }}</td>
-                                    <td>{{ enrollment.enrolled_at.strftime('%d.%m.%Y') }}</td>
                                     <td>
                                         <span class="fw-bold text-success">{{ "{:,.2f}".format(enrollment.total_paid) }} TL</span>
                                         {% if enrollment.payments %}
@@ -183,6 +184,187 @@
                     {% endif %}
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Duyurular -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Duyurular</h5>
+                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAnnouncementModal">
+                        <i class="bi bi-plus-circle"></i> Yeni Duyuru
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if announcements %}
+                        {% for announcement in announcements %}
+                        <div class="border-bottom pb-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="fw-bold mb-2">{{ announcement.title|safe }}</h6>
+                                    <div class="text-muted mb-2">{{ announcement.content|safe }}</div>
+                                    <small class="text-muted">
+                                        <i class="bi bi-clock"></i> {{ announcement.created_at.strftime('%d.%m.%Y %H:%M') }}
+                                        {% if announcement.creator %}
+                                        <i class="bi bi-person ms-2"></i> {{ announcement.creator.display_name }}
+                                        {% endif %}
+                                    </small>
+                                    
+                                    <!-- Emoji Tepkileri -->
+                                    {% if announcement.reactions %}
+                                    <div class="mt-2">
+                                        <small class="text-muted">Emoji Tepkileri:</small>
+                                        <div class="d-flex gap-1 flex-wrap">
+                                            {% set emoji_counts = {} %}
+                                            {% for reaction in announcement.reactions %}
+                                                {% set emoji = reaction.emoji %}
+                                                {% if emoji not in emoji_counts %}
+                                                    {% set _ = emoji_counts.update({emoji: 1}) %}
+                                                {% else %}
+                                                    {% set _ = emoji_counts.update({emoji: emoji_counts[emoji] + 1}) %}
+                                                {% endif %}
+                                            {% endfor %}
+                                            
+                                            {% for emoji, count in emoji_counts.items() %}
+                                            <div class="d-flex align-items-center bg-light rounded px-1 py-0">
+                                                <span class="fs-6 me-1">{{ emoji }}</span>
+                                                <small class="text-muted">{{ count }}</small>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="ms-3">
+                                    <form method="POST" action="{{ url_for('admin.delete_announcement', id=course.id, announcement_id=announcement.id) }}" 
+                                          style="display: inline;" onsubmit="return confirm('Bu duyuruyu silmek istediğinizden emin misiniz?')">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-megaphone display-4 text-muted"></i>
+                            <h5 class="mt-3 text-muted">Henüz duyuru yok</h5>
+                            <p class="text-muted">İlk duyuruyu eklemek için "Yeni Duyuru" butonuna tıklayın.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Duyuru Ekleme Modal -->
+<div class="modal fade" id="addAnnouncementModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Yeni Duyuru Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.add_announcement', id=course.id) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Başlık</label>
+                        <div class="btn-group btn-group-sm mb-2" role="group">
+                            <button type="button" class="btn btn-outline-secondary" onclick="formatText('title', 'bold')" title="Kalın">
+                                <i class="bi bi-type-bold"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="formatText('title', 'italic')" title="İtalik">
+                                <i class="bi bi-type-italic"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="formatText('title', 'underline')" title="Altı Çizili">
+                                <i class="bi bi-type-underline"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-warning dropdown-toggle" data-bs-toggle="dropdown" title="Emoji">
+                                <i class="bi bi-emoji-smile"></i>
+                            </button>
+                            <ul class="dropdown-menu" id="titleEmojiDropdown">
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('title', '😊')">😊</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('title', '🎉')">🎉</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('title', '📢')">📢</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('title', '⭐')">⭐</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('title', '🔥')">🔥</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('title', '💡')">💡</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('title', '📚')">📚</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('title', '✅')">✅</a></li>
+                            </ul>
+                        </div>
+                        <input type="text" class="form-control" id="title" name="title" required oninput="updatePreview()">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="content" class="form-label">İçerik</label>
+                        <div class="btn-group btn-group-sm mb-2" role="group">
+                            <button type="button" class="btn btn-outline-secondary" onclick="formatText('content', 'bold')" title="Kalın">
+                                <i class="bi bi-type-bold"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="formatText('content', 'italic')" title="İtalik">
+                                <i class="bi bi-type-italic"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="formatText('content', 'underline')" title="Altı Çizili">
+                                <i class="bi bi-type-underline"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="formatText('content', 'list')" title="Liste">
+                                <i class="bi bi-list-ul"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="formatText('content', 'paragraph')" title="Paragraf">
+                                <i class="bi bi-text-paragraph"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-warning dropdown-toggle" data-bs-toggle="dropdown" title="Emoji">
+                                <i class="bi bi-emoji-smile"></i>
+                            </button>
+                            <ul class="dropdown-menu" id="contentEmojiDropdown">
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '😊')">😊</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '🎉')">🎉</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '📢')">📢</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '⭐')">⭐</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '🔥')">🔥</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '💡')">💡</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '📚')">📚</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '✅')">✅</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '📝')">📝</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '🎯')">🎯</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '🚀')">🚀</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '💪')">💪</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '🎓')">🎓</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '📖')">📖</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="insertEmoji('content', '🔔')">🔔</a></li>
+                            </ul>
+                            <button type="button" class="btn btn-outline-info" onclick="togglePreview()" title="Önizleme">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <textarea class="form-control" id="content" name="content" rows="6" required oninput="updatePreview()"></textarea>
+                        <div id="preview" class="mt-2 p-3 border rounded" style="display: none; background-color: #f8f9fa;">
+                            <small class="text-muted mb-2 d-block">Önizleme:</small>
+                            <div id="previewContent"></div>
+                        </div>
+                        <div class="form-text">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i> 
+                                Formatlamak istediğiniz metni seçin ve yukarıdaki butonları kullanın. Emoji eklemek için emoji butonunu kullanın.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Duyuru Ekle
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -502,5 +684,119 @@ document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('paymentDate').value = today;
 });
+
+// Text formatting functions (for the new modal)
+function formatText(elementId, format) {
+    const element = document.getElementById(elementId);
+    const start = element.selectionStart;
+    const end = element.selectionEnd;
+    const selectedText = element.value.substring(start, end);
+
+    if (!selectedText) {
+        alert('Lütfen formatlamak istediğiniz metni seçin.');
+        return;
+    }
+
+    let newText;
+    switch (format) {
+        case 'bold':
+            newText = `<strong>${selectedText}</strong>`;
+            break;
+        case 'italic':
+            newText = `<em>${selectedText}</em>`;
+            break;
+        case 'underline':
+            newText = `<u>${selectedText}</u>`;
+            break;
+        case 'list':
+            // Liste için her satırı <li> ile sar
+            const lines = selectedText.split('\n').filter(line => line.trim());
+            newText = `<ul>\n${lines.map(line => `  <li>${line.trim()}</li>`).join('\n')}\n</ul>`;
+            break;
+        case 'paragraph':
+            // Paragraf için her satırı <p> ile sar
+            const paragraphs = selectedText.split('\n').filter(line => line.trim());
+            newText = paragraphs.map(line => `<p>${line.trim()}</p>`).join('\n');
+            break;
+        default:
+            return;
+    }
+
+    element.value = element.value.substring(0, start) + newText + element.value.substring(end);
+    
+    // Seçimi yeni eklenen metnin sonuna taşı
+    const newEnd = start + newText.length;
+    element.selectionStart = element.selectionEnd = newEnd;
+    
+    // Butona görsel geri bildirim
+    const button = event.target;
+    const originalClass = button.className;
+    button.className = button.className.replace('btn-outline-secondary', 'btn-success');
+    setTimeout(() => {
+        button.className = originalClass;
+    }, 200);
+    
+    // Önizlemeyi güncelle
+    updatePreview();
+}
+
+// Önizleme fonksiyonları
+function togglePreview() {
+    const preview = document.getElementById('preview');
+    const button = event.target.closest('button');
+    const icon = button.querySelector('i');
+    
+    if (preview.style.display === 'none') {
+        preview.style.display = 'block';
+        icon.className = 'bi bi-eye-slash';
+        button.title = 'Önizlemeyi Gizle';
+        updatePreview();
+    } else {
+        preview.style.display = 'none';
+        icon.className = 'bi bi-eye';
+        button.title = 'Önizleme';
+    }
+}
+
+function updatePreview() {
+    const title = document.getElementById('title').value;
+    const content = document.getElementById('content').value;
+    const previewContent = document.getElementById('previewContent');
+    
+    let previewHTML = '';
+    
+    if (title) {
+        previewHTML += `<h6 class="fw-bold mb-2">${title}</h6>`;
+    }
+    
+    if (content) {
+        previewHTML += `<div class="text-muted mb-2">${content}</div>`;
+    }
+    
+    if (!title && !content) {
+        previewHTML = '<em class="text-muted">Henüz başlık veya içerik yok...</em>';
+    }
+    
+    // HTML içeriğini güvenli şekilde render et
+    previewContent.innerHTML = previewHTML;
+}
+
+function insertEmoji(elementId, emoji) {
+    const element = document.getElementById(elementId);
+    const start = element.selectionStart;
+    const end = element.selectionEnd;
+    
+    // Emoji'yi seçili metnin yerine veya imlecin bulunduğu yere ekle
+    const newText = element.value.substring(0, start) + emoji + element.value.substring(end);
+    element.value = newText;
+    
+    // İmleci emoji'nin sonuna taşı
+    const newPosition = start + emoji.length;
+    element.selectionStart = element.selectionEnd = newPosition;
+    
+    // Element'e odaklan ve önizlemeyi güncelle
+    element.focus();
+    updatePreview();
+}
 </script>
 {% endblock %} 

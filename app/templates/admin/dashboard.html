@@ -15,6 +15,9 @@
                     <p class="lead text-muted">Öğrenci yönetimi ve sistem kontrolü</p>
                 </div>
                 <div class="d-flex gap-2">
+                    <a href="{{ url_for('admin.profile') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-person"></i> Profil
+                    </a>
                     <a href="{{ url_for('admin.change_password') }}" class="btn btn-outline-warning">
                         <i class="bi bi-shield-lock"></i> Şifre Değiştir
                     </a>

@@ -78,9 +78,13 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">Tüm Ödemeler</h5>
                         <div class="d-flex gap-2">
+                            <!-- Toplu Silme Butonu -->
+                            <button type="button" id="bulkDeleteBtn" class="btn btn-danger btn-sm" style="display: none;">
+                                <i class="bi bi-trash"></i> Seçilenleri Sil (<span id="selectedCount">0</span>)
+                            </button>
                             <!-- Arama -->
                             <form method="GET" class="d-flex gap-2">
-                                <input type="text" name="search" value="{{ search }}" class="form-control form-control-sm" placeholder="Açıklama ara...">
+                                <input type="text" name="search" value="{{ search }}" class="form-control form-control-sm" placeholder="Açıklama veya tutar ara...">
                                 <select name="date_filter" class="form-select form-select-sm">
                                     <option value="">Tüm Tarihler</option>
                                     <option value="today" {% if date_filter == 'today' %}selected{% endif %}>Bugün</option>
@@ -98,6 +102,11 @@
                             </form>
                         </div>
                     </div>
+                    <!-- Tutar Arama Uyarısı -->
+                    <div class="alert alert-info alert-sm mt-2 mb-0" style="font-size: 0.8rem; padding: 0.5rem;">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Tutar Arama İpucu:</strong> Tutar araması yaparken kuruş kısmını nokta ile yazınız. Örnek: <code>2000.93</code>
+                    </div>
                 </div>
                 <div class="card-body">
                     {% if payments.items %}
@@ -105,22 +114,24 @@
                         <table class="table table-hover">
                             <thead class="table-light">
                                 <tr>
+                                    <th>
+                                        <input type="checkbox" id="selectAll" class="form-check-input">
+                                    </th>
                                     <th>Tarih</th>
                                     <th>Açıklama</th>
                                     <th>Tutar</th>
-                                    <th>Referans No</th>
-                                    <th>Kayıt Tarihi</th>
                                     <th>İşlemler</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for payment in payments.items %}
                                 <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input payment-checkbox" value="{{ payment.id }}">
+                                    </td>
                                     <td>{{ payment.formatted_date }}</td>
                                     <td>{{ payment.description }}</td>
                                     <td class="fw-bold text-success">{{ payment.formatted_amount }}</td>
-                                    <td>{{ payment.reference_no or '-' }}</td>
-                                    <td>{{ payment.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                                     <td>
                                         <form method="POST" action="{{ url_for('admin.delete_payment', id=payment.id) }}" 
                                               style="display: inline;" onsubmit="return confirm('Bu ödemeyi silmek istediğinizden emin misiniz?')">
@@ -245,6 +256,15 @@
                             Gerekli sütunlar: Tarih, Açıklama, Tutar
                         </div>
                     </div>
+                    
+                    <div class="mb-3">
+                        <label for="minAmount" class="form-label">Minimum Tutar Filtresi (TL)</label>
+                        <input type="number" class="form-control" id="minAmount" placeholder="Örn: 100" step="0.01" min="0">
+                        <div class="form-text">
+                            Bu tutarın üzerindeki ödemeler gösterilecek. Boş bırakılırsa tüm ödemeler gösterilir.
+                        </div>
+                    </div>
+                    
                     <button type="button" class="btn btn-primary" onclick="uploadFile()">
                         <i class="bi bi-upload"></i> Dosyayı Yükle ve Analiz Et
                     </button>
@@ -253,10 +273,11 @@
                 <!-- Önizleme -->
                 <div id="previewSection" style="display: none;">
                     <h6 class="mb-3">Ödeme Önizlemesi</h6>
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i>
-                        <strong>Kırmızı satırlar:</strong> Sistemde zaten mevcut olan kayıtlar<br>
-                        <strong>Yeşil satırlar:</strong> Yeni eklenecek kayıtlar
+                    <div class="alert alert-info d-flex align-items-start">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <div>
+                            <div><strong>Kırmızı satırlar:</strong> Sistemde zaten mevcut olan kayıtlar</div>
+                        </div>
                     </div>
                     
                     <div class="table-responsive">
@@ -301,9 +322,17 @@ function uploadFile() {
         return;
     }
     
+    const minAmountInput = document.getElementById('minAmount');
+    const minAmount = minAmountInput.value.trim();
+    
     const formData = new FormData();
     formData.append('file', file);
     formData.append('csrf_token', '{{ csrf_token() }}');
+    
+    // Minimum tutar varsa ekle
+    if (minAmount) {
+        formData.append('min_amount', minAmount);
+    }
     
     // Loading göster
     const uploadBtn = document.querySelector('#uploadSection .btn-primary');
@@ -380,6 +409,7 @@ function updateSelection(index) {
 
 function resetUpload() {
     document.getElementById('statementFile').value = '';
+    document.getElementById('minAmount').value = '';
     document.getElementById('uploadSection').style.display = 'block';
     document.getElementById('previewSection').style.display = 'none';
     document.getElementById('selectAll').checked = false;
@@ -445,5 +475,104 @@ function savePayments() {
         alert('Kaydetme hatası: ' + error);
     });
 }
+
+// Toplu Silme JavaScript Kodu
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const paymentCheckboxes = document.querySelectorAll('.payment-checkbox');
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const selectedCountSpan = document.getElementById('selectedCount');
+    
+    // Tümünü seç/kaldır
+    selectAllCheckbox.addEventListener('change', function() {
+        paymentCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+        updateBulkDeleteButton();
+    });
+    
+    // Tekil checkbox'lar
+    paymentCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateBulkDeleteButton();
+            updateSelectAllCheckbox();
+        });
+    });
+    
+    // Toplu silme butonu
+    bulkDeleteBtn.addEventListener('click', function() {
+        const selectedIds = getSelectedPaymentIds();
+        if (selectedIds.length === 0) {
+            alert('Lütfen silinecek ödemeleri seçin');
+            return;
+        }
+        
+        if (confirm(`Seçilen ${selectedIds.length} ödemeyi silmek istediğinizden emin misiniz?`)) {
+            bulkDeletePayments(selectedIds);
+        }
+    });
+    
+    function updateBulkDeleteButton() {
+        const selectedCount = getSelectedPaymentIds().length;
+        if (selectedCount > 0) {
+            bulkDeleteBtn.style.display = 'inline-block';
+            selectedCountSpan.textContent = selectedCount;
+        } else {
+            bulkDeleteBtn.style.display = 'none';
+        }
+    }
+    
+    function updateSelectAllCheckbox() {
+        const checkedCount = document.querySelectorAll('.payment-checkbox:checked').length;
+        const totalCount = paymentCheckboxes.length;
+        
+        if (checkedCount === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        } else if (checkedCount === totalCount) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = true;
+        }
+    }
+    
+    function getSelectedPaymentIds() {
+        const selectedIds = [];
+        document.querySelectorAll('.payment-checkbox:checked').forEach(checkbox => {
+            selectedIds.push(parseInt(checkbox.value));
+        });
+        return selectedIds;
+    }
+    
+    function bulkDeletePayments(paymentIds) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        
+        fetch('/admin/payments/bulk-delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                payment_ids: paymentIds
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Hata: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Bulk delete error:', error);
+            alert('Silme hatası: ' + error);
+        });
+    }
+});
 </script>
 {% endblock %} 

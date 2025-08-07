@@ -1,23 +1,24 @@
-FROM python:3.9-slim
+# Python 3.11 slim image kullan
+FROM python:3.11-slim
 
+# Çalışma dizinini ayarla
 WORKDIR /app
 
-# Sistem paketlerini güncelle
+# Sistem bağımlılıklarını yükle
 RUN apt-get update && apt-get install -y \
     gcc \
-    g++ \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Python paketlerini güncelle
-RUN pip install --upgrade pip setuptools wheel
-
-# Requirements'ı kopyala ve yükle
+# Python bağımlılıklarını kopyala ve yükle
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Uygulama dosyalarını kopyala
 COPY . .
 
-EXPOSE 8000
+# Port 5000'i aç
+EXPOSE 5000
 
-CMD ["python", "run.py"]
+# Gunicorn ile çalıştır
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "run:app"] 

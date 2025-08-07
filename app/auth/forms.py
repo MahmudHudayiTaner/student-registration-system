@@ -37,4 +37,13 @@ class RegisterForm(FlaskForm):
     def validate_email(self, email):
         user = User.query.filter_by(email=email.data).first()
         if user:
-            raise ValidationError('Bu email adresi zaten kayıtlı.') 
+            raise ValidationError('Bu email adresi zaten kayıtlı.')
+
+class ForgotPasswordForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    submit = SubmitField('Şifre Sıfırlama Linki Gönder')
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('Yeni Şifre', validators=[DataRequired(), Length(min=6, message='Şifre en az 6 karakter olmalıdır')])
+    confirm_password = PasswordField('Şifre Tekrar', validators=[DataRequired(), EqualTo('password', message='Şifreler eşleşmiyor')])
+    submit = SubmitField('Şifreyi Değiştir') 
