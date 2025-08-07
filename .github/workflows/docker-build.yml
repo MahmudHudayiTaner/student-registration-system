@@ -48,6 +48,13 @@ jobs:
               "image": "${{ secrets.DOCKERHUB_USERNAME }}/kafka-app:latest",
               "ports": {
                 "80": "HTTP"
+              },
+              "environment": {
+                "SECRET_KEY": "${{ secrets.SECRET_KEY }}",
+                "DATABASE_URL": "${{ secrets.DATABASE_URL }}",
+                "MAIL_USERNAME": "${{ secrets.MAIL_USERNAME }}",
+                "MAIL_PASSWORD": "${{ secrets.MAIL_PASSWORD }}",
+                "MAIL_DEFAULT_SENDER": "${{ secrets.MAIL_DEFAULT_SENDER }}"
               }
             }
           }' \
