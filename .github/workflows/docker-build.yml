@@ -29,4 +29,29 @@ jobs:
         push: true
         tags: ${{ secrets.DOCKERHUB_USERNAME }}/kafka-app:latest
         cache-from: type=gha
-        cache-to: type=gha,mode=max 
+        cache-to: type=gha,mode=max
+
+    # LIGHTSAIL DEPLOYMENT STEP'İ EKLENDİ
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1  # Lightsail region'ınız
+
+    - name: Deploy to Lightsail
+      run: |
+        aws lightsail create-container-service-deployment \
+          --service-name kafka-app-service \
+          --containers '{
+            "kafka-app": {
+              "image": "${{ secrets.DOCKERHUB_USERNAME }}/kafka-app:latest",
+              "ports": {
+                "80": "HTTP"
+              }
+            }
+          }' \
+          --public-endpoint '{
+            "containerName": "kafka-app",
+            "containerPort": 80
+          }'
