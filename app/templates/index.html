@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Ana Sayfa - Kafka Dil Akademisi{% endblock %}
+{% block title %}Ana Sayfa - Örnek Kurs Adı{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-md-12 text-center">
         <div class="hero-section mb-5">
-            <h1 class="display-4 fw-bold mb-3">Kafka Dil Akademisi</h1>
-            <p class="lead mb-4">Bir noktadan sonra geri dönüş yok ... !</p>
-            <p class="lead mb-4">İşte tam o noktadayız ... !</p>
+            <h1 class="display-4 fw-bold mb-3">Örnek Kurs Adı</h1>
+            <p class="lead mb-4">Slogan ..... !</p>
+            <p class="lead mb-4">Slogan Devam ... !</p>
             <div class="hero-buttons">
                 {% if current_user.is_authenticated %}
                                          {% if current_user.role == 'admin' %}

@@ -12,7 +12,7 @@ class Config:
     
     # PostgreSQL veritabanı ayarları
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'sqlite:///kafka_app.db'
+        'sqlite:///student_registration_system.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Database connection pool settings
@@ -45,7 +45,7 @@ class Config:
     MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'false').lower() in ['true', 'on', '1']
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@kafka.com')
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@gmail.com')
 
 class DevelopmentConfig(Config):
     DEBUG = True

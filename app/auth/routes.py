@@ -124,7 +124,7 @@ def forgot_password():
             try:
                 reset_url = url_for('auth.reset_password', token=token, _external=True)
                 msg = Message(
-                    subject='Şifre Sıfırlama - Kafka Dil Akademisi',
+                    subject='Şifre Sıfırlama - Öğrenci Kayıt Sistemi',
                     recipients=[user.email]
                 )
                 
@@ -142,7 +142,7 @@ def forgot_password():
                     <p>Eğer bu isteği siz yapmadıysanız, bu emaili görmezden gelebilirsiniz.</p>
                     <hr style="margin: 20px 0;">
                     <p style="color: #666; font-size: 12px;">
-                        Kafka Dil Akademisi<br>
+                        Öğrenci Kayıt Sistemi<br>
                         Bu email otomatik olarak gönderilmiştir.
                     </p>
                 </div>

@@ -11,7 +11,7 @@
                 <h1 class="display-5 fw-bold text-primary mb-2">
                     <i class="bi bi-person-circle me-2"></i>Hoş Geldiniz, {{ current_user.student_profile.first_name }} {{ current_user.student_profile.last_name }}!
                 </h1>
-                <p class="lead text-muted">Kafka Dil Akademisi'ne hoş geldiniz. Aşağıdaki hızlı işlemlerden birini seçebilirsiniz.</p>
+                <p class="lead text-muted">Öğrenci Kayıt Sistemine hoş geldiniz. Aşağıdaki hızlı işlemlerden birini seçebilirsiniz.</p>
             </div>
         </div>
     </div>
@@ -116,7 +116,7 @@
 
 <style>
 .admin-dashboard-bg {
-    background: linear-gradient(135deg, var(--kafka-light) 0%, #e9ecef 100%);
+                    background: linear-gradient(135deg, var(--light) 0%, #e9ecef 100%);
     min-height: 100vh;
     padding: 2rem 0;
 }
@@ -152,19 +152,19 @@
 }
 
 .text-primary {
-    color: var(--kafka-primary) !important;
+                    color: var(--primary) !important;
 }
 
 .text-info {
-    color: var(--kafka-accent) !important;
+                    color: var(--accent) !important;
 }
 
 .text-success {
-    color: var(--kafka-success) !important;
+                    color: var(--success) !important;
 }
 
 .text-warning {
-    color: var(--kafka-warning) !important;
+                    color: var(--warning) !important;
 }
 
 .opacity-75 {
